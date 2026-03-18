@@ -17,34 +17,34 @@ import { router } from "expo-router";
 // ─── Initial Data ─────────────────────────────────────────────────────────────
 
 const INITIAL_PRODUCTS = [
-  { id: 1, name: "Organic Tomatoes", price: "4.99", unit: "lb", stock: 150, sold: 450, category: "Vegetables", description: "Fresh, organic tomatoes picked daily" },
-  { id: 2, name: "Mixed Vegetables", price: "8.99", unit: "basket", stock: 80, sold: 220, category: "Vegetables", description: "A fresh mix of seasonal vegetables" },
+  { id: 1, name: "Organic Tomatoes", price: "4.99", unit: "lb",     stock: 150, sold: 450, category: "Vegetables", description: "Fresh, organic tomatoes picked daily" },
+  { id: 2, name: "Mixed Vegetables", price: "8.99", unit: "basket", stock: 80,  sold: 220, category: "Vegetables", description: "A fresh mix of seasonal vegetables"    },
 ];
 
 const CATEGORIES = ["Vegetables", "Fruits", "Dairy", "Grains", "Poultry", "Other"];
-const UNITS = ["lb", "kg", "basket", "dozen", "gallon", "jar", "bag", "ear", "pint", "piece"];
+const UNITS      = ["lb", "kg", "basket", "dozen", "gallon", "jar", "bag", "ear", "pint", "piece"];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const calcRevenue = (price, sold) => (parseFloat(price || 0) * (sold || 0)).toFixed(2);
-const totalRevenue = (products) => products.reduce((sum, p) => sum + parseFloat(p.price) * p.sold, 0).toFixed(2);
-const totalSold = (products) => products.reduce((sum, p) => sum + p.sold, 0);
-const emptyForm = () => ({ name: "", price: "", unit: "lb", stock: "", category: "Vegetables", description: "" });
+const calcRevenue  = (price, sold) => (parseFloat(price || 0) * (sold || 0)).toFixed(2);
+const totalRevenue = (products)    => products.reduce((sum, p) => sum + parseFloat(p.price) * p.sold, 0).toFixed(2);
+const totalSold    = (products)    => products.reduce((sum, p) => sum + p.sold, 0);
+const emptyForm    = ()            => ({ name: "", price: "", unit: "lb", stock: "", category: "Vegetables", description: "" });
 
 // ─── Product Form Modal ───────────────────────────────────────────────────────
 
 function ProductFormModal({ visible, onClose, onSave, editProduct }) {
-  const [form, setForm] = useState(emptyForm());
+  const [form,   setForm]   = useState(emptyForm());
   const [errors, setErrors] = useState({});
 
   useState(() => {
     if (editProduct) {
       setForm({
-        name: editProduct.name,
-        price: editProduct.price,
-        unit: editProduct.unit,
-        stock: String(editProduct.stock),
-        category: editProduct.category,
+        name:        editProduct.name,
+        price:       editProduct.price,
+        unit:        editProduct.unit,
+        stock:       String(editProduct.stock),
+        category:    editProduct.category,
         description: editProduct.description || "",
       });
     } else {
@@ -54,17 +54,15 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
   }, [editProduct, visible]);
 
   const set = (key, value) => {
-    setForm((f) => ({ ...f, [key]: value }));
-    setErrors((e) => ({ ...e, [key]: null }));
+    setForm((f)  => ({ ...f,  [key]: value }));
+    setErrors((e) => ({ ...e, [key]: null  }));
   };
 
   const validate = () => {
     const e = {};
-    if (!form.name.trim()) e.name = "Product name is required";
-    if (!form.price.trim() || isNaN(form.price) || parseFloat(form.price) <= 0)
-      e.price = "Enter a valid price";
-    if (!form.stock.trim() || isNaN(form.stock) || parseInt(form.stock) < 0)
-      e.stock = "Enter a valid stock quantity";
+    if (!form.name.trim())                                                    e.name  = "Product name is required";
+    if (!form.price.trim() || isNaN(form.price) || parseFloat(form.price) <= 0) e.price = "Enter a valid price";
+    if (!form.stock.trim() || isNaN(form.stock) || parseInt(form.stock)    < 0) e.stock = "Enter a valid stock quantity";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -72,46 +70,34 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
   const handleSave = () => {
     if (!validate()) return;
     onSave({
-      name: form.name.trim(),
-      price: parseFloat(form.price).toFixed(2),
-      unit: form.unit,
-      stock: parseInt(form.stock),
-      category: form.category,
+      name:        form.name.trim(),
+      price:       parseFloat(form.price).toFixed(2),
+      unit:        form.unit,
+      stock:       parseInt(form.stock),
+      category:    form.category,
       description: form.description.trim(),
     });
     setForm(emptyForm());
     setErrors({});
   };
 
-  const handleClose = () => {
-    setForm(emptyForm());
-    setErrors({});
-    onClose();
-  };
+  const handleClose = () => { setForm(emptyForm()); setErrors({}); onClose(); };
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
-              <Text style={styles.modalTitle}>
-                {editProduct ? "Edit Product" : "Add New Product"}
-              </Text>
+              <Text style={styles.modalTitle}>{editProduct ? "Edit Product" : "Add New Product"}</Text>
               <TouchableOpacity onPress={handleClose} style={styles.modalClose}>
                 <Ionicons name="close" size={22} color="#374151" />
               </TouchableOpacity>
             </View>
 
-            <ScrollView
-              style={styles.formScroll}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-            >
+            <ScrollView style={styles.formScroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+
               {/* Product Name */}
               <View style={styles.fieldGroup}>
                 <Text style={styles.fieldLabel}>Product Name *</Text>
@@ -125,7 +111,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
                 {errors.name && <Text style={styles.errorText}>{errors.name}</Text>}
               </View>
 
-              {/* Price + Unit row */}
+              {/* Price + Unit */}
               <View style={styles.row}>
                 <View style={[styles.fieldGroup, { flex: 1.2 }]}>
                   <Text style={styles.fieldLabel}>Price ($) *</Text>
@@ -144,14 +130,8 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 6 }}>
                     <View style={{ flexDirection: "row", gap: 6 }}>
                       {UNITS.map((u) => (
-                        <TouchableOpacity
-                          key={u}
-                          onPress={() => set("unit", u)}
-                          style={[styles.chip, form.unit === u && styles.chipSelected]}
-                        >
-                          <Text style={[styles.chipText, form.unit === u && styles.chipTextSelected]}>
-                            {u}
-                          </Text>
+                        <TouchableOpacity key={u} onPress={() => set("unit", u)} style={[styles.chip, form.unit === u && styles.chipSelected]}>
+                          <Text style={[styles.chipText, form.unit === u && styles.chipTextSelected]}>{u}</Text>
                         </TouchableOpacity>
                       ))}
                     </View>
@@ -178,14 +158,8 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
                 <Text style={styles.fieldLabel}>Category</Text>
                 <View style={styles.chipRow}>
                   {CATEGORIES.map((c) => (
-                    <TouchableOpacity
-                      key={c}
-                      onPress={() => set("category", c)}
-                      style={[styles.chip, form.category === c && styles.chipSelected]}
-                    >
-                      <Text style={[styles.chipText, form.category === c && styles.chipTextSelected]}>
-                        {c}
-                      </Text>
+                    <TouchableOpacity key={c} onPress={() => set("category", c)} style={[styles.chip, form.category === c && styles.chipSelected]}>
+                      <Text style={[styles.chipText, form.category === c && styles.chipTextSelected]}>{c}</Text>
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -206,26 +180,18 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
                 />
               </View>
 
-              {/* Preview price string */}
+              {/* Price preview */}
               {form.price && form.unit && !isNaN(form.price) && parseFloat(form.price) > 0 && (
                 <View style={styles.previewBadge}>
                   <Ionicons name="pricetag-outline" size={14} color="#10b981" />
-                  <Text style={styles.previewText}>
-                    Preview: ${parseFloat(form.price).toFixed(2)}/{form.unit}
-                  </Text>
+                  <Text style={styles.previewText}>Preview: ${parseFloat(form.price).toFixed(2)}/{form.unit}</Text>
                 </View>
               )}
 
-              {/* Save button */}
+              {/* Save */}
               <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-                <Ionicons
-                  name={editProduct ? "checkmark-circle-outline" : "add-circle-outline"}
-                  size={20}
-                  color="#fff"
-                />
-                <Text style={styles.saveBtnText}>
-                  {editProduct ? "Save Changes" : "Add Product"}
-                </Text>
+                <Ionicons name={editProduct ? "checkmark-circle-outline" : "add-circle-outline"} size={20} color="#fff" />
+                <Text style={styles.saveBtnText}>{editProduct ? "Save Changes" : "Add Product"}</Text>
               </TouchableOpacity>
 
               <View style={{ height: 32 }} />
@@ -240,20 +206,22 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function SellerScreen() {
-  const [products, setProducts] = useState(INITIAL_PRODUCTS);
+  const [products,     setProducts]     = useState(INITIAL_PRODUCTS);
   const [modalVisible, setModalVisible] = useState(false);
-  const [editProduct, setEditProduct] = useState(null);
+  const [editProduct,  setEditProduct]  = useState(null);
+
+  // Replace this with real alert count from your context/store later
+  const activeAlerts = 2;
+
+  const goToAlerts = () => router.push("/alerts");
 
   const handleLogout = () => router.replace("/");
-
-  const openAdd = () => { setEditProduct(null); setModalVisible(true); };
-  const openEdit = (product) => { setEditProduct(product); setModalVisible(true); };
+  const openAdd      = () => { setEditProduct(null); setModalVisible(true); };
+  const openEdit     = (product) => { setEditProduct(product); setModalVisible(true); };
 
   const handleSave = (formData) => {
     if (editProduct) {
-      setProducts((prev) =>
-        prev.map((p) => p.id === editProduct.id ? { ...p, ...formData } : p)
-      );
+      setProducts((prev) => prev.map((p) => p.id === editProduct.id ? { ...p, ...formData } : p));
       Alert.alert("Updated", `"${formData.name}" has been updated.`);
     } else {
       setProducts((prev) => [...prev, { id: Date.now(), sold: 0, ...formData }]);
@@ -264,23 +232,16 @@ export default function SellerScreen() {
   };
 
   const handleDelete = (product) => {
-    Alert.alert(
-      "Delete Product",
-      `Are you sure you want to delete "${product.name}"?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: () => setProducts((prev) => prev.filter((p) => p.id !== product.id)),
-        },
-      ]
-    );
+    Alert.alert("Delete Product", `Are you sure you want to delete "${product.name}"?`, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Delete", style: "destructive", onPress: () => setProducts((prev) => prev.filter((p) => p.id !== product.id)) },
+    ]);
   };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+
+      {/* ── Header ── */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.logoIcon}>
@@ -291,14 +252,27 @@ export default function SellerScreen() {
             <Text style={styles.headerSubtitle}>Manage your products</Text>
           </View>
         </View>
+
         <View style={styles.headerRight}>
+          {/* Shield alert button */}
+          <TouchableOpacity style={styles.alertIconBtn} onPress={goToAlerts}>
+            <Ionicons name="shield" size={22} color="#fff" />
+            {activeAlerts > 0 && (
+              <View style={styles.alertIconBadge}>
+                <Text style={styles.alertIconBadgeText}>{activeAlerts}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
           <TouchableOpacity style={styles.notificationButton}>
             <Ionicons name="notifications-outline" size={22} color="#fff" />
           </TouchableOpacity>
+
           <View style={styles.userInfo}>
             <Text style={styles.userName}>marydoo211</Text>
             <Text style={styles.userRole}>Seller</Text>
           </View>
+
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <Ionicons name="log-out-outline" size={22} color="#fff" />
           </TouchableOpacity>
@@ -306,7 +280,24 @@ export default function SellerScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Stats */}
+
+        {/* ── Red Alert Banner ── */}
+        {activeAlerts > 0 && (
+          <TouchableOpacity style={styles.alertBanner} onPress={goToAlerts} activeOpacity={0.85}>
+            <View style={styles.alertBannerLeft}>
+              <Ionicons name="warning" size={20} color="#fff" />
+              <View>
+                <Text style={styles.alertBannerTitle}>
+                  {activeAlerts} Active Security Alert{activeAlerts > 1 ? "s" : ""}
+                </Text>
+                <Text style={styles.alertBannerSub}>Tap to view and respond</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color="#fff" />
+          </TouchableOpacity>
+        )}
+
+        {/* ── Stats ── */}
         <View style={styles.statsContainer}>
           <View style={[styles.statCard, styles.revenueCard]}>
             <View style={styles.statHeader}>
@@ -316,6 +307,7 @@ export default function SellerScreen() {
             <Text style={styles.statValue}>${totalRevenue(products)}</Text>
             <Text style={styles.statChange}>+12% from last month</Text>
           </View>
+
           <View style={[styles.statCard, styles.soldCard]}>
             <View style={styles.statHeader}>
               <Text style={styles.statLabel}>Products Sold</Text>
@@ -324,6 +316,7 @@ export default function SellerScreen() {
             <Text style={styles.statValue}>{totalSold(products)}</Text>
             <Text style={styles.statChange}>+8% from last month</Text>
           </View>
+
           <View style={[styles.statCard, styles.activeCard]}>
             <View style={styles.statHeader}>
               <Text style={styles.statLabel}>Active Products</Text>
@@ -334,13 +327,29 @@ export default function SellerScreen() {
           </View>
         </View>
 
-        {/* Add button */}
+        {/* ── Farm Security Card ── */}
+        <TouchableOpacity style={styles.securityCard} onPress={goToAlerts} activeOpacity={0.85}>
+          <View style={styles.securityCardLeft}>
+            <View style={styles.securityCardIcon}>
+              <Ionicons name="shield-checkmark" size={22} color="#ef4444" />
+            </View>
+            <View>
+              <Text style={styles.securityCardTitle}>Farm Security Center</Text>
+              <Text style={styles.securityCardSub}>
+                Monitor intruder alerts · Call authorities · View history
+              </Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color="#9ca3af" />
+        </TouchableOpacity>
+
+        {/* ── Add Product Button ── */}
         <TouchableOpacity style={styles.addProductButton} onPress={openAdd}>
           <Ionicons name="add-circle-outline" size={20} color="#fff" />
           <Text style={styles.addProductText}>Add New Product</Text>
         </TouchableOpacity>
 
-        {/* Products Section */}
+        {/* ── Products Table ── */}
         <View style={styles.productsSection}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>My Products</Text>
@@ -357,42 +366,27 @@ export default function SellerScreen() {
             </View>
           ) : (
             <>
-              {/* Table Header */}
               <View style={styles.tableHeader}>
                 <Text style={[styles.thCell, { flex: 2.2 }]}>Product</Text>
                 <Text style={[styles.thCell, { flex: 1.4 }]}>Price</Text>
                 <Text style={[styles.thCell, { flex: 0.9, textAlign: "center" }]}>Stock</Text>
                 <Text style={[styles.thCell, { flex: 0.9, textAlign: "center" }]}>Sold</Text>
                 <Text style={[styles.thCell, { flex: 1.5 }]}>Revenue</Text>
-                <Text style={[styles.thCell, { flex: 1, textAlign: "center" }]}>Actions</Text>
+                <Text style={[styles.thCell, { flex: 1,   textAlign: "center" }]}>Actions</Text>
               </View>
 
               {products.map((product, index) => (
-                <View
-                  key={product.id}
-                  style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}
-                >
-                  {/* Name + category badge */}
+                <View key={product.id} style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}>
                   <View style={{ flex: 2.2 }}>
                     <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
                     <View style={styles.categoryBadge}>
                       <Text style={styles.categoryBadgeText}>{product.category}</Text>
                     </View>
                   </View>
-
-                  <Text style={[styles.tdCell, { flex: 1.4 }]}>
-                    ${product.price}/{product.unit}
-                  </Text>
-                  <Text style={[styles.tdCell, styles.cyanText, { flex: 0.9, textAlign: "center" }]}>
-                    {product.stock}
-                  </Text>
-                  <Text style={[styles.tdCell, styles.cyanText, { flex: 0.9, textAlign: "center" }]}>
-                    {product.sold}
-                  </Text>
-                  <Text style={[styles.tdCell, styles.greenText, { flex: 1.5 }]}>
-                    ${calcRevenue(product.price, product.sold)}
-                  </Text>
-
+                  <Text style={[styles.tdCell, { flex: 1.4 }]}>${product.price}/{product.unit}</Text>
+                  <Text style={[styles.tdCell, styles.cyanText,  { flex: 0.9, textAlign: "center" }]}>{product.stock}</Text>
+                  <Text style={[styles.tdCell, styles.cyanText,  { flex: 0.9, textAlign: "center" }]}>{product.sold}</Text>
+                  <Text style={[styles.tdCell, styles.greenText, { flex: 1.5 }]}>${calcRevenue(product.price, product.sold)}</Text>
                   <View style={[styles.actionsCell, { flex: 1 }]}>
                     <TouchableOpacity style={styles.actionBtn} onPress={() => openEdit(product)}>
                       <Ionicons name="pencil-outline" size={17} color="#6b7280" />
@@ -408,15 +402,9 @@ export default function SellerScreen() {
               <View style={styles.totalsRow}>
                 <Text style={[styles.totalLabel, { flex: 2.2 }]}>Totals</Text>
                 <Text style={{ flex: 1.4 }} />
-                <Text style={[styles.totalLabel, { flex: 0.9, textAlign: "center" }]}>
-                  {products.reduce((s, p) => s + p.stock, 0)}
-                </Text>
-                <Text style={[styles.totalLabel, { flex: 0.9, textAlign: "center" }]}>
-                  {totalSold(products)}
-                </Text>
-                <Text style={[styles.totalLabel, styles.greenText, { flex: 1.5 }]}>
-                  ${totalRevenue(products)}
-                </Text>
+                <Text style={[styles.totalLabel, { flex: 0.9, textAlign: "center" }]}>{products.reduce((s, p) => s + p.stock, 0)}</Text>
+                <Text style={[styles.totalLabel, { flex: 0.9, textAlign: "center" }]}>{totalSold(products)}</Text>
+                <Text style={[styles.totalLabel, styles.greenText, { flex: 1.5 }]}>${totalRevenue(products)}</Text>
                 <View style={{ flex: 1 }} />
               </View>
             </>
@@ -440,20 +428,41 @@ export default function SellerScreen() {
 
 const styles = StyleSheet.create({
   container:            { flex: 1, backgroundColor: "#f0fdf4" },
+
+  // Header
   header:               { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingTop: 50, paddingBottom: 16, backgroundColor: "#10b981" },
   headerLeft:           { flexDirection: "row", alignItems: "center" },
   logoIcon:             { width: 44, height: 44, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 10, justifyContent: "center", alignItems: "center", marginRight: 12 },
   headerTitle:          { fontSize: 18, fontWeight: "bold", color: "#fff" },
   headerSubtitle:       { fontSize: 12, color: "rgba(255,255,255,0.8)", marginTop: 2 },
-  headerRight:          { flexDirection: "row", alignItems: "center", gap: 12 },
+  headerRight:          { flexDirection: "row", alignItems: "center", gap: 10 },
   notificationButton:   { padding: 8 },
   userInfo:             { alignItems: "flex-end" },
   userName:             { fontSize: 14, fontWeight: "600", color: "#fff" },
   userRole:             { fontSize: 11, color: "rgba(255,255,255,0.8)" },
   logoutButton:         { width: 36, height: 36, backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 8, justifyContent: "center", alignItems: "center" },
 
+  // Alert icon in header
+  alertIconBtn:         { position: "relative", padding: 8 },
+  alertIconBadge:       { position: "absolute", top: 2, right: 2, backgroundColor: "#ef4444", borderRadius: 8, minWidth: 16, height: 16, justifyContent: "center", alignItems: "center", paddingHorizontal: 3 },
+  alertIconBadgeText:   { color: "#fff", fontSize: 9, fontWeight: "bold" },
+
+  // Alert banner
+  alertBanner:          { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#ef4444", borderRadius: 12, padding: 14, marginBottom: 16 },
+  alertBannerLeft:      { flexDirection: "row", alignItems: "center", gap: 10 },
+  alertBannerTitle:     { fontSize: 14, fontWeight: "700", color: "#fff" },
+  alertBannerSub:       { fontSize: 12, color: "rgba(255,255,255,0.85)", marginTop: 1 },
+
+  // Security card
+  securityCard:         { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: "#fecaca" },
+  securityCardLeft:     { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
+  securityCardIcon:     { width: 44, height: 44, backgroundColor: "#fef2f2", borderRadius: 10, justifyContent: "center", alignItems: "center" },
+  securityCardTitle:    { fontSize: 14, fontWeight: "700", color: "#111827" },
+  securityCardSub:      { fontSize: 11, color: "#6b7280", marginTop: 2 },
+
+  // Content
   content:              { flex: 1, padding: 16 },
-  statsContainer:       { flexDirection: "row", gap: 10, marginBottom: 20 },
+  statsContainer:       { flexDirection: "row", gap: 10, marginBottom: 16 },
   statCard:             { flex: 1, padding: 14, borderRadius: 16 },
   revenueCard:          { backgroundColor: "#10b981" },
   soldCard:             { backgroundColor: "#06b6d4" },
@@ -466,6 +475,7 @@ const styles = StyleSheet.create({
   addProductButton:     { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#10b981", paddingVertical: 13, paddingHorizontal: 20, borderRadius: 10, marginBottom: 20, gap: 8 },
   addProductText:       { color: "#fff", fontSize: 15, fontWeight: "700" },
 
+  // Products section
   productsSection:      { backgroundColor: "#fff", borderRadius: 16, padding: 16, marginBottom: 20 },
   sectionHeader:        { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 16 },
   sectionTitle:         { fontSize: 17, fontWeight: "bold", color: "#111827" },
@@ -490,6 +500,7 @@ const styles = StyleSheet.create({
   emptyText:            { fontSize: 16, color: "#9ca3af", marginTop: 12, fontWeight: "600" },
   emptySub:             { fontSize: 13, color: "#d1d5db", marginTop: 4 },
 
+  // Modal
   modalOverlay:         { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
   modalSheet:           { backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 20, paddingBottom: 8, maxHeight: "92%" },
   modalHandle:          { width: 40, height: 4, backgroundColor: "#e5e7eb", borderRadius: 2, alignSelf: "center", marginTop: 12, marginBottom: 4 },
