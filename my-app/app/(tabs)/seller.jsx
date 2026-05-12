@@ -11,11 +11,14 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
-import { addMarketProduct, deleteMarketProduct, nextMarketProductId, updateMarketProduct } from "../lib/market-store";
+import { addMarketProduct, deleteMarketProduct, nextMarketProductId, updateMarketProduct, fetchSellerProducts } from "../../lib/market-store";
+import { useUser, logout, supabase } from "../../lib/auth-store";
+import BottomNav from "../../components/BottomNav";
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
 
@@ -121,27 +124,14 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
           quality: 0.8,
         });
 
-        if (!result.canceled) {
-          setUploadingImage(true);
-          try {
-            const response = await fetch(result.assets[0].uri);
-            const blob = await response.blob();
-            const reader = new FileReader();
-            reader.onloadend = () => {
-              const base64 = reader.result;
-              set("image", base64);
-              setImageError("");
-              setUploadingImage(false);
-            };
-            reader.readAsDataURL(blob);
-          } catch (error) {
-            setUploadingImage(false);
-            Alert.alert("Error", "Failed to process image: " + error.message);
-          }
+        if (!result.canceled && result.assets && result.assets.length > 0) {
+          // Use the local URI directly — React Native Image supports local file URIs
+          set("image", result.assets[0].uri);
+          setImageError("");
         }
       } catch (error) {
         setUploadingImage(false);
-        Alert.alert("Error", "Failed to pick image: " + error.message);
+        Alert.alert("Error", "Failed to pick image: " + (error instanceof Error ? error.message : String(error)));
       }
     };
 
@@ -309,48 +299,76 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function SellerScreen() {
+  const user = useUser();
   const [products,     setProducts]     = useState(INITIAL_PRODUCTS);
+  const [loading,      setLoading]      = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editProduct,  setEditProduct]  = useState(null);
+
+  useEffect(() => {
+    if (user) {
+      loadProducts();
+    }
+  }, [user]);
+
+  const loadProducts = async () => {
+    if (!user) return;
+    setLoading(true);
+    const dbProducts = await fetchSellerProducts(user.id);
+    if (dbProducts && dbProducts.length > 0) {
+      setProducts(dbProducts);
+    }
+    setLoading(false);
+  };
 
   // Replace this with real alert count from your context/store later
   const activeAlerts = 2;
 
   const goToAlerts = () => router.push("/alerts");
 
-  const handleLogout = () => router.replace("/");
+  const handleLogout = async () => {
+    await logout();
+    router.replace("/");
+  };
   const openAdd      = () => { setEditProduct(null); setModalVisible(true); };
   const openEdit     = (product) => { setEditProduct(product); setModalVisible(true); };
 
-  const handleSave = (formData) => {
-    if (editProduct) {
-      setProducts((prev) => prev.map((p) => p.id === editProduct.id ? { ...p, ...formData } : p));
-      updateMarketProduct(editProduct.id, {
-        ...formData,
-        price: parseFloat(formData.price),
-        stock: parseInt(formData.stock),
-        unit: `/${formData.unit}`,
-      });
-      Alert.alert("Updated", `"${formData.name}" has been updated.`);
-    } else {
-      const newProduct = { id: nextMarketProductId(), sold: 0, rating: 4.5, farm: "Local Farm", featured: false, organic: true, ...formData };
-      setProducts((prev) => [...prev, newProduct]);
-      addMarketProduct({
-        id: newProduct.id,
-        name: newProduct.name,
-        rating: 4.5,
-        stock: newProduct.stock,
-        description: newProduct.description,
-        farm: newProduct.farm,
-        price: parseFloat(newProduct.price),
-        unit: `/${newProduct.unit}`,
-        image: newProduct.image,
-        featured: false,
-        organic: true,
-        category: newProduct.category,
-      });
-      Alert.alert("Added", `"${formData.name}" has been added to your listings.`);
+  const handleSave = async (formData) => {
+    if (!user) return;
+    
+    try {
+      if (editProduct) {
+        await updateMarketProduct(editProduct.id, {
+          ...formData,
+          price: parseFloat(formData.price),
+          stock: parseInt(formData.stock),
+          unit: `/${formData.unit}`,
+        });
+        setProducts((prev) => prev.map((p) => p.id === editProduct.id ? { ...p, ...formData } : p));
+        Alert.alert("Updated", `"${formData.name}" has been updated.`);
+      } else {
+        await addMarketProduct({
+          name: formData.name,
+          rating: 4.5,
+          stock: formData.stock,
+          description: formData.description,
+          farm: user.fullName || "My Farm",
+          price: parseFloat(formData.price),
+          unit: `/${formData.unit}`,
+          image: formData.image,
+          featured: false,
+          organic: true,
+          category: formData.category,
+        }, user.id);
+        
+        // Refresh products to get the new ID from DB
+        await loadProducts();
+        Alert.alert("Added", `"${formData.name}" has been added to your listings.`);
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to save product. Please try again.");
     }
+    
     setModalVisible(false);
     setEditProduct(null);
   };
@@ -358,9 +376,36 @@ export default function SellerScreen() {
   const handleDelete = (product) => {
     Alert.alert("Delete Product", `Are you sure you want to delete "${product.name}"?`, [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => { setProducts((prev) => prev.filter((p) => p.id !== product.id)); deleteMarketProduct(product.id); } },
+      { text: "Delete", style: "destructive", onPress: async () => { 
+        try {
+          await deleteMarketProduct(product.id);
+          setProducts((prev) => prev.filter((p) => p.id !== product.id)); 
+        } catch (e) {
+          Alert.alert("Error", "Failed to delete product.");
+        }
+      } },
     ]);
   };
+
+  // Role protection
+  useEffect(() => {
+    if (user && user.role !== "seller" && user.role !== "admin") {
+      router.replace("/");
+    }
+  }, [user]);
+
+  if (!user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#10b981" />
+        <Text style={styles.loadingText}>Verifying access...</Text>
+      </View>
+    );
+  }
+
+  if (user.role !== "seller" && user.role !== "admin") {
+    return null; // Redirecting via useEffect
+  }
 
   return (
     <View style={styles.container}>
@@ -393,8 +438,8 @@ export default function SellerScreen() {
           </TouchableOpacity>
 
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>marydoo211</Text>
-            <Text style={styles.userRole}>Seller</Text>
+            <Text style={styles.userName}>{user?.fullName || "Guest"}</Text>
+            <Text style={styles.userRole}>{user?.role || "Seller"}</Text>
           </View>
 
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
@@ -543,6 +588,8 @@ export default function SellerScreen() {
         <View style={{ height: 32 }} />
       </ScrollView>
 
+      <BottomNav />
+
       <ProductFormModal
         visible={modalVisible}
         onClose={() => { setModalVisible(false); setEditProduct(null); }}
@@ -590,7 +637,9 @@ const styles = StyleSheet.create({
   securityCardSub:      { fontSize: 11, color: "#6b7280", marginTop: 2 },
 
   // Content
-  content:              { flex: 1, padding: 16 },
+  content:              { flex: 1, padding: 16, paddingBottom: 120 },
+  loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f0fdf4" },
+  loadingText: { marginTop: 12, color: "#10b981", fontSize: 14 },
   statsContainer:       { flexDirection: "row", gap: 10, marginBottom: 16 },
   statCard:             { flex: 1, padding: 14, borderRadius: 16 },
   revenueCard:          { backgroundColor: "#10b981" },

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,43 +7,14 @@ import {
   ScrollView,
   Image,
   Alert,
+  ActivityIndicator,
+  SafeAreaView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useAdminApprovalState } from "../../lib/admin-approval-store";
-
-// ─── Mock Data ────────────────────────────────────────────────────────────────
-
-const recentActivities = [
-  { id: 1, title: "New order placed", time: "2 minutes ago", icon: "checkmark-circle", color: "#10b981", bgColor: "#ecfdf5" },
-  { id: 2, title: "New user registered", time: "1 hour ago", icon: "person-add", color: "#3b82f6", bgColor: "#eff6ff" },
-  { id: 3, title: "Product added by seller", time: "3 hours ago", icon: "cube", color: "#d946ef", bgColor: "#fdf2f8" },
-];
-
-const platformStats = [
-  { label: "Active Users", percentage: 75, color: "#10b981" },
-  { label: "Organic Products", percentage: 88, color: "#3b82f6" },
-];
-
-const mockUsers = [
-  { id: 1, name: "John Buyer", email: "john@example.com", role: "buyer", status: "active" },
-  { id: 2, name: "Green Valley Farm", email: "seller1@farm.com", role: "seller", status: "active" },
-  { id: 3, name: "Jane Smith", email: "jane@example.com", role: "buyer", status: "active" },
-  { id: 4, name: "Sunrise Orchards", email: "sunrise@farm.com", role: "seller", status: "suspended" },
-];
-
-const mockProducts = [
-  { id: 1, name: "Organic Tomatoes", price: "$4.99/lb", stock: 150, seller: "Green Valley Farm", category: "Vegetables", image: "https://images.unsplash.com/photo-1546094096-0df4bcaaa337?w=60&h=60&fit=crop" },
-  { id: 2, name: "Fresh Apples", price: "$3.49/lb", stock: 200, seller: "Sunrise Orchards", category: "Fruits", image: "https://images.unsplash.com/photo-1568702846914-96b305d2aaeb?w=60&h=60&fit=crop" },
-  { id: 3, name: "Farm Fresh Milk", price: "$5.99/gallon", stock: 75, seller: "Happy Cow Dairy", category: "Dairy", image: "https://images.unsplash.com/photo-1550583724-b2692b85b150?w=60&h=60&fit=crop" },
-  { id: 4, name: "Free Range Eggs", price: "$6.49/dozen", stock: 120, seller: "Sunrise Orchards", category: "Poultry", image: "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=60&h=60&fit=crop" },
-];
-
-const mockOrders = [
-  { id: "#1001", customer: "John Buyer", total: "$45.99", date: "2025-12-08", payment: "card", status: "Delivered" },
-  { id: "#1002", customer: "Jane Smith", total: "$78.50", date: "2025-12-09", payment: "mobile", status: "Processing" },
-  { id: "#1003", customer: "John Buyer", total: "$32.99", date: "2025-12-10", payment: "cash", status: "Pending" },
-];
+import { supabase } from "../../lib/auth-store";
+import { useUser } from "../../lib/auth-store";
+import BottomNav from "../../components/BottomNav";
 
 const tabs = ["Overview", "Users", "Products", "Orders"];
 
@@ -92,23 +63,44 @@ function SectionHeader({ title, subtitle }) {
 // ─── Users Tab ────────────────────────────────────────────────────────────────
 
 function UsersTab({ users, setUsers }) {
-  const handleBan = (id) => {
+  const [updating, setUpdating] = useState(null);
+
+  const handleToggleStatus = async (user) => {
+    if (user.role !== "seller") {
+      Alert.alert("Notice", "Status toggling is currently only supported for Seller accounts.");
+      return;
+    }
+
     Alert.alert(
       "Confirm Action",
-      "Are you sure you want to toggle this user's status?",
+      `Are you sure you want to ${user.is_active ? "suspend" : "activate"} this seller?`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Confirm",
           style: "destructive",
-          onPress: () =>
-            setUsers((prev) =>
-              prev.map((u) =>
-                u.id === id
-                  ? { ...u, status: u.status === "active" ? "suspended" : "active" }
-                  : u
-              )
-            ),
+          onPress: async () => {
+            try {
+              setUpdating(user.id);
+              const { error } = await supabase
+                .from('sellers')
+                .update({ is_active: !user.is_active })
+                .eq('id', user.id);
+
+              if (error) throw error;
+              
+              setUsers(prev => prev.map(u => 
+                u.id === user.id ? { ...u, is_active: !user.is_active } : u
+              ));
+              
+              Alert.alert("Success", "User status updated.");
+            } catch (err) {
+              console.error(err);
+              Alert.alert("Error", "Failed to update status.");
+            } finally {
+              setUpdating(null);
+            }
+          },
         },
       ]
     );
@@ -133,7 +125,7 @@ function UsersTab({ users, setUsers }) {
           style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}
         >
           <Text style={[styles.tableCell, { flex: 2 }]} numberOfLines={1}>
-            {user.name}
+            {user.full_name || "Unknown"}
           </Text>
           <Text style={[styles.tableCell, styles.emailCell, { flex: 2.5 }]} numberOfLines={1}>
             {user.email}
@@ -146,18 +138,22 @@ function UsersTab({ users, setUsers }) {
           </View>
           <View style={{ flex: 1.2, alignItems: "center" }}>
             <Badge
-              label={user.status}
-              {...statusBadgeStyle(user.status)}
+              label={user.role === 'buyer' ? 'active' : (user.is_active ? 'active' : 'suspended')}
+              {...statusBadgeStyle(user.role === 'buyer' ? 'active' : (user.is_active ? 'active' : 'suspended'))}
             />
           </View>
           <View style={{ flex: 0.8, alignItems: "center" }}>
-            <TouchableOpacity onPress={() => handleBan(user.id)}>
-              <Ionicons
-                name={user.status === "active" ? "ban" : "checkmark-circle"}
-                size={22}
-                color={user.status === "active" ? "#ef4444" : "#10b981"}
-              />
-            </TouchableOpacity>
+            {updating === user.id ? (
+              <ActivityIndicator size="small" color="#c026d3" />
+            ) : (
+              <TouchableOpacity onPress={() => handleToggleStatus(user)}>
+                <Ionicons
+                  name={user.is_active === false ? "checkmark-circle" : "ban"}
+                  size={22}
+                  color={user.is_active === false ? "#10b981" : "#ef4444"}
+                />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       ))}
@@ -168,23 +164,53 @@ function UsersTab({ users, setUsers }) {
 // ─── Products Tab ─────────────────────────────────────────────────────────────
 
 function ProductsTab({ products, setProducts }) {
+  const [deleting, setDeleting] = useState(null);
+
   const handleDelete = (id) => {
     Alert.alert(
       "Delete Product",
-      "Are you sure you want to delete this product?",
+      "Are you sure you want to delete this product listing?",
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
-          onPress: () => setProducts((prev) => prev.filter((p) => p.id !== id)),
+          onPress: async () => {
+            try {
+              setDeleting(id);
+              const { error } = await supabase
+                .from('products')
+                .delete()
+                .eq('id', id);
+
+              if (error) throw error;
+              setProducts(prev => prev.filter(p => p.id !== id));
+              Alert.alert("Success", "Product removed.");
+            } catch (err) {
+              console.error(err);
+              Alert.alert("Error", "Failed to delete product.");
+            } finally {
+              setDeleting(null);
+            }
+          },
         },
       ]
     );
   };
 
-  const handleEdit = (product) => {
-    Alert.alert("Edit Product", `Editing: ${product.name}\n(Connect to your edit modal here)`);
+  const handleToggleActive = async (product) => {
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update({ is_active: !product.is_active })
+        .eq('id', product.id);
+
+      if (error) throw error;
+      setProducts(prev => prev.map(p => p.id === product.id ? { ...p, is_active: !p.is_active } : p));
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Failed to update product.");
+    }
   };
 
   return (
@@ -197,7 +223,6 @@ function ProductsTab({ products, setProducts }) {
         <Text style={[styles.tableHeaderCell, { flex: 1.5 }]}>Price</Text>
         <Text style={[styles.tableHeaderCell, { flex: 0.8, textAlign: "center" }]}>Stock</Text>
         <Text style={[styles.tableHeaderCell, { flex: 1.8 }]}>Seller</Text>
-        <Text style={[styles.tableHeaderCell, { flex: 1.5, textAlign: "center" }]}>Category</Text>
         <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: "center" }]}>Actions</Text>
       </View>
 
@@ -209,36 +234,39 @@ function ProductsTab({ products, setProducts }) {
           {/* Product with image */}
           <View style={[styles.productCell, { flex: 2.5 }]}>
             <Image
-              source={{ uri: product.image }}
+              source={{ uri: product.image_url || "https://via.placeholder.com/40" }}
               style={styles.productImage}
-              defaultSource={{ uri: "https://via.placeholder.com/40" }}
             />
             <Text style={styles.tableCell} numberOfLines={2}>
               {product.name}
             </Text>
           </View>
 
-          <Text style={[styles.tableCell, { flex: 1.5 }]}>{product.price}</Text>
+          <Text style={[styles.tableCell, { flex: 1.5 }]}>GHS {product.price}</Text>
 
           <Text style={[styles.tableCell, { flex: 0.8, textAlign: "center" }]}>
             {product.stock}
           </Text>
 
           <Text style={[styles.tableCell, styles.sellerCell, { flex: 1.8 }]} numberOfLines={2}>
-            {product.seller}
+            {product.sellers?.farm_name || "Unknown"}
           </Text>
 
-          <View style={{ flex: 1.5, alignItems: "center" }}>
-            <Badge label={product.category} {...categoryBadgeStyle()} />
-          </View>
-
           <View style={[styles.actionButtons, { flex: 1 }]}>
-            <TouchableOpacity onPress={() => handleEdit(product)} style={styles.editBtn}>
-              <Ionicons name="pencil-outline" size={16} color="#6b7280" />
+            <TouchableOpacity onPress={() => handleToggleActive(product)} style={styles.editBtn}>
+              <Ionicons 
+                name={product.is_active ? "eye-outline" : "eye-off-outline"} 
+                size={18} 
+                color={product.is_active ? "#10b981" : "#94a3b8"} 
+              />
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => handleDelete(product.id)} style={styles.deleteBtn}>
-              <Ionicons name="trash-outline" size={16} color="#ef4444" />
-            </TouchableOpacity>
+            {deleting === product.id ? (
+              <ActivityIndicator size="small" color="#ef4444" />
+            ) : (
+              <TouchableOpacity onPress={() => handleDelete(product.id)} style={styles.deleteBtn}>
+                <Ionicons name="trash-outline" size={18} color="#ef4444" />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       ))}
@@ -251,16 +279,27 @@ function ProductsTab({ products, setProducts }) {
 const ORDER_STATUSES = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
 
 function OrdersTab({ orders, setOrders }) {
-  const handleStatusChange = (id, newStatus) => {
-    setOrders((prev) =>
-      prev.map((o) => (o.id === id ? { ...o, status: newStatus } : o))
-    );
+  const handleStatusChange = async (id, newStatus) => {
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ order_status: newStatus.toLowerCase() })
+        .eq('id', id);
+
+      if (error) throw error;
+      setOrders((prev) =>
+        prev.map((o) => (o.id === id ? { ...o, order_status: newStatus.toLowerCase() } : o))
+      );
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Failed to update order status.");
+    }
   };
 
   const handleViewDetails = (order) => {
     Alert.alert(
-      `Order ${order.id}`,
-      `Customer: ${order.customer}\nTotal: ${order.total}\nDate: ${order.date}\nPayment: ${order.payment}\nStatus: ${order.status}`
+      `Order Detail`,
+      `ID: ${order.id}\nCustomer: ${order.buyer_email}\nTotal: GHS ${order.total_amount}\nStatus: ${order.order_status}\nPayment: ${order.payment_status}`
     );
   };
 
@@ -268,27 +307,28 @@ function OrdersTab({ orders, setOrders }) {
     <View style={styles.tabContent}>
       <SectionHeader title="Order Management" subtitle="Track and manage all orders" />
 
-      {orders.map((order, index) => (
+      {orders.length === 0 ? (
+        <Text style={styles.emptyText}>No orders found.</Text>
+      ) : orders.map((order, index) => (
         <View
           key={order.id}
           style={[styles.orderCard, index % 2 === 0 && styles.tableRowAlt]}
         >
-          {/* Row 1: ID, Customer, Total */}
           <View style={styles.orderRow}>
-            <Text style={styles.orderId}>{order.id}</Text>
+            <Text style={styles.orderId}>#{order.id.substring(0, 6)}</Text>
             <Text style={[styles.tableCell, { flex: 1.5 }]} numberOfLines={1}>
-              {order.customer}
+              {order.buyer_email}
             </Text>
-            <Text style={styles.orderTotal}>{order.total}</Text>
+            <Text style={styles.orderTotal}>GHS {order.total_amount}</Text>
           </View>
 
-          {/* Row 2: Date, Payment badge, Status badge, View Details */}
           <View style={styles.orderRowSecond}>
-            <Text style={styles.orderDate}>{order.date}</Text>
+            <Text style={styles.orderDate}>
+              {new Date(order.created_at).toLocaleDateString()}
+            </Text>
 
-            <Badge label={order.payment} {...paymentBadgeStyle()} />
+            <Badge label={order.payment_method} {...paymentBadgeStyle()} />
 
-            {/* Status selector */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -300,16 +340,16 @@ function OrdersTab({ orders, setOrders }) {
                   onPress={() => handleStatusChange(order.id, s)}
                   style={[
                     styles.statusChip,
-                    order.status === s && {
-                      backgroundColor: statusBadgeStyle(s).bg,
-                      borderColor: statusBadgeStyle(s).text,
+                    order.order_status === s.toLowerCase() && {
+                      backgroundColor: statusBadgeStyle(s.toLowerCase()).bg,
+                      borderColor: statusBadgeStyle(s.toLowerCase()).text,
                     },
                   ]}
                 >
                   <Text
                     style={[
                       styles.statusChipText,
-                      order.status === s && { color: statusBadgeStyle(s).text, fontWeight: "600" },
+                      order.order_status === s.toLowerCase() && { color: statusBadgeStyle(s.toLowerCase()).text, fontWeight: "600" },
                     ]}
                   >
                     {s}
@@ -319,7 +359,7 @@ function OrdersTab({ orders, setOrders }) {
             </ScrollView>
 
             <TouchableOpacity onPress={() => handleViewDetails(order)}>
-              <Text style={styles.viewDetails}>View Details</Text>
+              <Text style={styles.viewDetails}>Details</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -330,43 +370,80 @@ function OrdersTab({ orders, setOrders }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function AdminScreen() {
-  const adminApproval = useAdminApprovalState();
+export default function AdminDashboard() {
+  const user = useUser();
   const [activeTab, setActiveTab] = useState("Overview");
-  const [users, setUsers] = useState(mockUsers);
-  const [products, setProducts] = useState(mockProducts);
-  const [orders, setOrders] = useState(mockOrders);
+  const [users, setUsers] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const handleLogout = () => {
-    router.replace("/");
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      
+      const { data: userData, error: userError } = await supabase
+        .from('user_profiles')
+        .select('*, sellers(is_active)')
+        .order('created_at', { ascending: false });
+      
+      if (userError) throw userError;
+      
+      const flattenedUsers = (userData || []).map(u => ({
+        ...u,
+        is_active: u.sellers?.is_active ?? true
+      }));
+      setUsers(flattenedUsers);
+
+      const { data: productData, error: productError } = await supabase
+        .from('products')
+        .select(`
+          *,
+          sellers (farm_name)
+        `)
+        .order('created_at', { ascending: false });
+      
+      if (productError) throw productError;
+      setProducts(productData || []);
+
+      const { data: orderData, error: orderError } = await supabase
+        .from('orders')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (orderError) throw orderError;
+      setOrders(orderData || []);
+
+    } catch (error) {
+      console.error("Admin fetch error:", error);
+      Alert.alert("Error", "Failed to load dashboard data");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  if (!adminApproval.approved) {
+  useEffect(() => {
+    if (user && user.role === "admin") {
+      fetchData();
+    }
+  }, [user]);
+
+  if (!user || user.role !== "admin") {
     return (
-      <View style={styles.lockedContainer}>
-        <View style={styles.lockedCard}>
-          <Ionicons name="lock-closed" size={34} color="#7c3aed" />
-          <Text style={styles.lockedTitle}>Admin Access Hidden</Text>
-          <Text style={styles.lockedText}>
-            Tap the leaf icon 5 times on home to request approval from marydoo211@gmail.com.
-          </Text>
-          {adminApproval.status === "pending" && (
-            <Text style={styles.lockedPending}>Approval is pending. This page unlocks automatically once approved.</Text>
-          )}
-          {adminApproval.status === "error" && (
-            <Text style={styles.lockedError}>{adminApproval.errorMessage}</Text>
-          )}
-          <TouchableOpacity style={styles.lockedButton} onPress={() => router.replace("/")}>
-            <Text style={styles.lockedButtonText}>Back to Home</Text>
-          </TouchableOpacity>
-        </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#c026d3" />
+        <Text style={styles.loadingText}>Verifying admin access...</Text>
       </View>
     );
   }
 
+  const handleLogout = () => {
+    supabase.auth.signOut();
+    router.replace("/");
+  };
+
   return (
-    <View style={styles.container}>
-      {/* Header */}
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <View style={styles.logoIcon}>
@@ -378,17 +455,12 @@ export default function AdminScreen() {
           </View>
         </View>
         <View style={styles.headerRight}>
-          <View style={styles.userInfo}>
-            <Text style={styles.userName}>marydoo211</Text>
-            <Text style={styles.userRole}>Administrator</Text>
-          </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <Ionicons name="log-out-outline" size={22} color="#fff" />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Navigation Tabs */}
       <View style={styles.tabsContainer}>
         <ScrollView
           horizontal
@@ -414,82 +486,48 @@ export default function AdminScreen() {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* ── Overview ── */}
-        {activeTab === "Overview" && (
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#c026d3" />
+            <Text style={styles.loadingText}>Loading data...</Text>
+          </View>
+        ) : (
           <>
-            <View style={styles.statsGrid}>
-              <View style={[styles.statCard, styles.usersCard]}>
-                <Ionicons name="people" size={28} color="#fff" />
-                <Text style={styles.statLabel}>Total Users</Text>
-                <Text style={styles.statValue}>{users.length}</Text>
-              </View>
-              <View style={[styles.statCard, styles.productsCard]}>
-                <Ionicons name="cube" size={28} color="#fff" />
-                <Text style={styles.statLabel}>Total Products</Text>
-                <Text style={styles.statValue}>{products.length}</Text>
-              </View>
-              <View style={[styles.statCard, styles.ordersCard]}>
-                <Ionicons name="receipt" size={28} color="#fff" />
-                <Text style={styles.statLabel}>Total Orders</Text>
-                <Text style={styles.statValue}>{orders.length}</Text>
-              </View>
-              <View style={[styles.statCard, styles.revenueCard]}>
-                <Ionicons name="trending-up" size={28} color="#fff" />
-                <Text style={styles.statLabel}>Revenue</Text>
-                <Text style={styles.statValue}>$157</Text>
-              </View>
-            </View>
-
-            <View style={styles.contentGrid}>
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Recent Activity</Text>
-                {recentActivities.map((activity) => (
-                  <View key={activity.id} style={[styles.activityItem, { backgroundColor: activity.bgColor }]}>
-                    <View style={[styles.activityIcon, { backgroundColor: activity.color }]}>
-                      <Ionicons name={activity.icon} size={16} color="#fff" />
-                    </View>
-                    <View style={styles.activityContent}>
-                      <Text style={styles.activityTitle}>{activity.title}</Text>
-                      <Text style={styles.activityTime}>{activity.time}</Text>
-                    </View>
+            {activeTab === "Overview" && (
+              <>
+                <View style={styles.statsGrid}>
+                  <View style={[styles.statCard, styles.usersCard]}>
+                    <Ionicons name="people" size={28} color="#fff" />
+                    <Text style={styles.statLabel}>Total Users</Text>
+                    <Text style={styles.statValue}>{users.length}</Text>
                   </View>
-                ))}
-              </View>
-
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Platform Stats</Text>
-                {platformStats.map((stat) => (
-                  <View key={stat.label} style={styles.statItem}>
-                    <View style={styles.statItemHeader}>
-                      <Text style={styles.statItemLabel}>{stat.label}</Text>
-                      <Text style={styles.statItemPercentage}>{stat.percentage}%</Text>
-                    </View>
-                    <View style={styles.progressBarContainer}>
-                      <View style={[styles.progressBar, { backgroundColor: stat.color, width: `${stat.percentage}%` }]} />
-                    </View>
+                  <View style={[styles.statCard, styles.productsCard]}>
+                    <Ionicons name="cube" size={28} color="#fff" />
+                    <Text style={styles.statLabel}>Total Products</Text>
+                    <Text style={styles.statValue}>{products.length}</Text>
                   </View>
-                ))}
-              </View>
-            </View>
+                  <View style={[styles.statCard, styles.ordersCard]}>
+                    <Ionicons name="receipt" size={28} color="#fff" />
+                    <Text style={styles.statLabel}>Total Orders</Text>
+                    <Text style={styles.statValue}>{orders.length}</Text>
+                  </View>
+                  <View style={[styles.statCard, styles.revenueCard]}>
+                    <Ionicons name="trending-up" size={28} color="#fff" />
+                    <Text style={styles.statLabel}>Revenue</Text>
+                    <Text style={styles.statValue}>GHS {orders.reduce((sum, o) => sum + (Number(o.total_amount) || 0), 0).toFixed(0)}</Text>
+                  </View>
+                </View>
+              </>
+            )}
+
+            {activeTab === "Users" && <UsersTab users={users} setUsers={setUsers} />}
+            {activeTab === "Products" && <ProductsTab products={products} setProducts={setProducts} />}
+            {activeTab === "Orders" && <OrdersTab orders={orders} setOrders={setOrders} />}
           </>
         )}
-
-        {/* ── Users ── */}
-        {activeTab === "Users" && (
-          <UsersTab users={users} setUsers={setUsers} />
-        )}
-
-        {/* ── Products ── */}
-        {activeTab === "Products" && (
-          <ProductsTab products={products} setProducts={setProducts} />
-        )}
-
-        {/* ── Orders ── */}
-        {activeTab === "Orders" && (
-          <OrdersTab orders={orders} setOrders={setOrders} />
-        )}
       </ScrollView>
-    </View>
+      <BottomNav />
+    </SafeAreaView>
   );
 }
 
@@ -527,7 +565,7 @@ const styles = StyleSheet.create({
   tabTextActive:    { color: "#fff" },
 
   // Content
-  content:          { flex: 1, padding: 16 },
+  content:          { flex: 1, padding: 16, paddingBottom: 120 },
 
   // Overview stats
   statsGrid:        { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 24 },
@@ -592,4 +630,20 @@ const styles = StyleSheet.create({
   statusChip:       { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 20, borderWidth: 1, borderColor: "#e5e7eb", marginRight: 4 },
   statusChipText:   { fontSize: 11, color: "#9ca3af" },
   viewDetails:      { fontSize: 12, color: "#c026d3", fontWeight: "600" },
+  loadingContainer: {
+    padding: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    marginTop: 12,
+    color: "#6b7280",
+    fontSize: 14,
+  },
+  emptyText: {
+    textAlign: "center",
+    padding: 20,
+    color: "#9ca3af",
+    fontStyle: "italic",
+  },
 });

@@ -30,9 +30,29 @@ export default function AuthGate({ role }: Props) {
           </View>
 
           <View style={styles.body}>
-            <Text style={styles.message}>Sign in and create account are turned off for now.</Text>
-            <TouchableOpacity style={styles.primaryBtn} onPress={() => router.back()}>
-              <Text style={styles.primaryText}>Continue as guest</Text>
+            <Text style={styles.message}>
+              Join FarmConnect to start {role === "seller" ? "selling your produce" : "buying fresh from farms"}.
+            </Text>
+            
+            <TouchableOpacity 
+              style={styles.primaryBtn} 
+              onPress={() => router.push("/Login")}
+            >
+              <Text style={styles.primaryText}>Sign In</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.secondaryBtn} 
+              onPress={() => router.push({ pathname: "/signup", params: { role } })}
+            >
+              <Text style={styles.secondaryText}>Create Account</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={styles.guestBtn} 
+              onPress={() => router.back()}
+            >
+              <Text style={styles.guestText}>Continue as guest</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -71,6 +91,10 @@ const styles = StyleSheet.create({
   closeBtn: { padding: 6 },
   body: { padding: 18, alignItems: "stretch" },
   message: { color: "#334155", fontSize: 14, textAlign: "center", marginBottom: 14 },
-  primaryBtn: { backgroundColor: "#0f9d58", paddingVertical: 12, borderRadius: 10, alignItems: "center" },
-  primaryText: { color: "#fff", fontWeight: "700" },
+  primaryBtn: { backgroundColor: "#0f9d58", paddingVertical: 14, borderRadius: 12, alignItems: "center", marginBottom: 12 },
+  primaryText: { color: "#fff", fontWeight: "700", fontSize: 15 },
+  secondaryBtn: { backgroundColor: "#fff", paddingVertical: 14, borderRadius: 12, alignItems: "center", marginBottom: 12, borderWidth: 1, borderColor: "#0f9d58" },
+  secondaryText: { color: "#0f9d58", fontWeight: "700", fontSize: 15 },
+  guestBtn: { paddingVertical: 10, alignItems: "center" },
+  guestText: { color: "#64748b", fontWeight: "600", fontSize: 14 },
 });

@@ -12,6 +12,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useMarketProducts } from "../../lib/market-store";
+import BottomNav from "../../components/BottomNav";
+import { useAuthStore } from "../../lib/auth-store";
 
 const CATEGORIES = ["All", "Vegetables", "Fruits", "Dairy", "Grains"];
 
@@ -64,6 +66,7 @@ export default function ExploreScreen() {
   const params = useLocalSearchParams();
   const initialQuery = Array.isArray(params.query) ? params.query[0] : params.query;
   const products = useMarketProducts();
+  const { initialized } = useAuthStore.useState();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
@@ -184,6 +187,7 @@ export default function ExploreScreen() {
           ))
         )}
       </ScrollView>
+      <BottomNav />
     </SafeAreaView>
   );
 }
@@ -195,7 +199,7 @@ const styles = StyleSheet.create({
   },
   container: {
     padding: 16,
-    paddingBottom: 32,
+    paddingBottom: 120,
     gap: 14,
   },
   header: {

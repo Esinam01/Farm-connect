@@ -26,9 +26,9 @@ Notifications.setNotificationHandler({
 });
 
 const PAYMENT_NETWORKS = [
-  { code: "MTN", name: "MTN Mobile Money", icon: "phone-portrait-outline" },
-  { code: "AIRTELTIGO", name: "AirtelTigo Money", icon: "phone-portrait-outline" },
-  { code: "VODAFONE", name: "Vodafone Cash", icon: "phone-portrait-outline" },
+  { code: "MTN", name: "MTN Mobile Money", icon: "phone-portrait-outline" as const },
+  { code: "AIRTELTIGO", name: "AirtelTigo Money", icon: "phone-portrait-outline" as const },
+  { code: "VODAFONE", name: "Vodafone Cash", icon: "phone-portrait-outline" as const },
 ];
 
 function resolveApiBaseUrl() {
@@ -63,8 +63,8 @@ function resolveApiBaseUrl() {
   return configured;
 }
 
-function normalizeApiBaseUrl(raw) {
-  if (!raw || typeof raw !== "string") return raw;
+function normalizeApiBaseUrl(raw: string): string {
+  if (!raw || typeof raw !== "string") return "";
   let u = raw.trim();
   u = u.replace(/\/+$/, "");
   if (/:\\d{2,5}/.test(u)) return u;
@@ -75,7 +75,7 @@ function normalizeApiBaseUrl(raw) {
   return u;
 }
 
-async function fetchWithTimeout(resource, options = {}, timeout = 10000) {
+async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}, timeout: number = 10000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
@@ -88,11 +88,21 @@ async function fetchWithTimeout(resource, options = {}, timeout = 10000) {
   }
 }
 
+
+type CartItem = {
+  id: number;
+  name: string;
+  price: number;
+  qty: number;
+  unit: string;
+  image: string;
+};
+
 export default function CheckoutScreen() {
   const API_URL = normalizeApiBaseUrl(resolveApiBaseUrl());
   const params = useLocalSearchParams();
   const paymentReminderSentForOrder = useRef<string | null>(null);
-  const [cart, setCart] = useState([]);
+  const [cart, setCart] = useState<CartItem[]>([]);
   const [currentStep, setCurrentStep] = useState(1); // 1: Details, 2: Payment Method, 3: Payment
   const [loading, setLoading] = useState(false);
   const [orderCreationError, setOrderCreationError] = useState("");
@@ -114,7 +124,8 @@ export default function CheckoutScreen() {
   useEffect(() => {
     if (params.cart) {
       try {
-        const parsedCart = JSON.parse(decodeURIComponent(params.cart));
+        const cartParam = Array.isArray(params.cart) ? params.cart[0] : params.cart;
+        const parsedCart = JSON.parse(decodeURIComponent(cartParam));
         setCart(parsedCart);
       } catch (error) {
         console.error("Failed to parse cart:", error);
@@ -127,6 +138,8 @@ export default function CheckoutScreen() {
   useEffect(() => {
     Notifications.requestPermissionsAsync().catch(() => null);
   }, []);
+
+  const totalAmount = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
   useEffect(() => {
     if (currentStep !== 2 || !orderId) {
@@ -147,8 +160,6 @@ export default function CheckoutScreen() {
       trigger: null,
     }).catch(() => null);
   }, [currentStep, orderId, totalAmount]);
-
-  const totalAmount = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
 
   // Validate buyer details
   const validateBuyerDetails = () => {

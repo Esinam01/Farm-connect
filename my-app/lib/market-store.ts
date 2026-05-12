@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { supabase } from "./auth-store";
 
 export type MarketProduct = {
   id: number;
@@ -13,6 +14,24 @@ export type MarketProduct = {
   featured: boolean;
   organic: boolean;
   category: string;
+};
+
+export type OrderItem = {
+  id: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  priceAtTime: number;
+  sellerId: string;
+};
+
+export type Order = {
+  id: string;
+  buyerId: string;
+  totalAmount: number;
+  status: "pending" | "completed" | "cancelled";
+  createdAt: number;
+  items?: OrderItem[];
 };
 
 type MarketState = {
@@ -35,7 +54,7 @@ const initialProducts: MarketProduct[] = [
   { id: 1002, name: "Mixed Vegetables", rating: 4.6, stock: 80, description: "A fresh mix of seasonal vegetables", farm: "Sunrise Growers", price: 8.99, unit: "/basket", image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=300&fit=crop", featured: false, organic: true, category: "Vegetables" },
 ];
 
-const state: MarketState = {
+let state: MarketState = {
   products: initialProducts,
   buyerSignedUp: false,
 };
@@ -59,32 +78,286 @@ export function useMarketProducts() {
   return useSyncExternalStore(subscribe, () => state.products, () => state.products);
 }
 
+/**
+ * Fetch products from Supabase
+ */
+export async function fetchProducts() {
+  if (!supabase) {
+    console.warn("Market Store: Supabase is not configured. Cannot fetch products.");
+    return;
+  }
+  try {
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    if (data && data.length > 0) {
+      // Map database schema to frontend type
+      const dbProducts: MarketProduct[] = data.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        rating: Number(item.rating) || 0,
+        stock: item.stock || 0,
+        description: item.description || "",
+        farm: item.farm || "",
+        price: Number(item.price),
+        unit: item.unit,
+        image: item.image_url || "",
+        featured: item.featured || false,
+        organic: item.organic || false,
+        category: item.category,
+      }));
+
+      // Combine with featured hardcoded products if desired, or just use DB
+      state = { ...state, products: dbProducts };
+      emit();
+    }
+  } catch (error) {
+    console.error("Error fetching products:", error);
+    // Fallback to initialProducts is already handled by state initialization
+  }
+}
+
+/**
+ * Fetch products for a specific seller from Supabase
+ */
+export async function fetchSellerProducts(sellerId: string) {
+  if (!supabase) {
+    console.warn("Market Store: Supabase is not configured. Cannot fetch seller products.");
+    return [];
+  }
+  try {
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .eq("seller_id", sellerId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    if (data) {
+      const dbProducts: MarketProduct[] = data.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        rating: Number(item.rating) || 0,
+        stock: item.stock || 0,
+        description: item.description || "",
+        farm: item.farm || "",
+        price: Number(item.price),
+        unit: item.unit,
+        image: item.image_url || "",
+        featured: item.featured || false,
+        organic: item.organic || false,
+        category: item.category,
+      }));
+      
+      // We don't replace the whole market state here, 
+      // but return the products for the component to use.
+      return dbProducts;
+    }
+    return [];
+  } catch (error) {
+    console.error("Error fetching seller products:", error);
+    return [];
+  }
+}
+
 export function useBuyerSignedUp() {
   return useSyncExternalStore(subscribe, () => state.buyerSignedUp, () => state.buyerSignedUp);
 }
 
-export function addMarketProduct(product: MarketProduct) {
-  state.products = [...state.products, product];
-  emit();
+export async function addMarketProduct(product: Omit<MarketProduct, "id">, sellerId: string) {
+  try {
+    const { data, error } = await supabase
+      .from("products")
+      .insert([
+        {
+          name: product.name,
+          description: product.description,
+          price: product.price,
+          unit: product.unit,
+          category: product.category,
+          farm: product.farm,
+          stock: product.stock,
+          image_url: product.image,
+          organic: product.organic,
+          featured: product.featured,
+          seller_id: sellerId,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    const typedData = data as any;
+    if (typedData) {
+      const newProduct: MarketProduct = {
+        id: typedData.id,
+        name: typedData.name,
+        rating: 0,
+        stock: typedData.stock,
+        description: typedData.description,
+        farm: typedData.farm,
+        price: Number(typedData.price),
+        unit: typedData.unit,
+        image: typedData.image_url,
+        featured: typedData.featured,
+        organic: typedData.organic,
+        category: typedData.category,
+      };
+      state = { ...state, products: [newProduct, ...state.products] };
+      emit();
+    }
+  } catch (error) {
+    console.error("Error adding product:", error);
+    throw error;
+  }
 }
 
-export function updateMarketProduct(id: number, patch: MarketPatch) {
-  state.products = state.products.map((product) =>
-    product.id === id ? { ...product, ...patch } : product
-  );
-  emit();
+export async function updateMarketProduct(id: number, patch: MarketPatch) {
+  try {
+    const { error } = await supabase
+      .from("products")
+      .update({
+        name: patch.name,
+        description: patch.description,
+        price: patch.price,
+        unit: patch.unit,
+        category: patch.category,
+        farm: patch.farm,
+        stock: patch.stock,
+        image_url: patch.image,
+        organic: patch.organic,
+      })
+      .eq("id", id);
+
+    if (error) throw error;
+
+    state = {
+      ...state,
+      products: state.products.map((product) =>
+        product.id === id ? { ...product, ...patch } : product
+      )
+    };
+    emit();
+  } catch (error) {
+    console.error("Error updating product:", error);
+    throw error;
+  }
 }
 
-export function deleteMarketProduct(id: number) {
-  state.products = state.products.filter((product) => product.id !== id);
-  emit();
+export async function deleteMarketProduct(id: number) {
+  try {
+    const { error } = await supabase
+      .from("products")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+
+    state = {
+      ...state,
+      products: state.products.filter((product) => product.id !== id)
+    };
+    emit();
+  } catch (error) {
+    console.error("Error deleting product:", error);
+    throw error;
+  }
 }
 
 export function setBuyerSignedUp(value: boolean) {
-  state.buyerSignedUp = value;
+  state = { ...state, buyerSignedUp: value };
   emit();
 }
 
 export function nextMarketProductId() {
   return Date.now();
+}
+
+/**
+ * Place an order
+ */
+export async function placeOrder(buyerId: string, items: { productId: number; quantity: number; price: number; sellerId: string; productName: string }[], total: number) {
+  if (!supabase) return;
+
+  try {
+    // 1. Create the order
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert([{
+        buyer_id: buyerId,
+        total_amount: total,
+        status: "pending"
+      }])
+      .select()
+      .single();
+
+    if (orderError) throw orderError;
+
+    // 2. Create the order items
+    const orderItems = items.map(item => ({
+      order_id: order.id,
+      product_id: item.productId,
+      seller_id: item.sellerId,
+      quantity: item.quantity,
+      price_at_time: item.price
+    }));
+
+    const { error: itemsError } = await supabase
+      .from("order_items")
+      .insert(orderItems);
+
+    if (itemsError) throw itemsError;
+
+    return order;
+  } catch (error) {
+    console.error("Error placing order:", error);
+    throw error;
+  }
+}
+
+/**
+ * Fetch orders for a buyer
+ */
+export async function fetchBuyerOrders(buyerId: string): Promise<Order[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from("orders")
+      .select(`
+        *,
+        order_items (
+          *,
+          products (name)
+        )
+      `)
+      .eq("buyer_id", buyerId)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+
+    return (data as any[]).map(o => ({
+      id: o.id,
+      buyerId: o.buyer_id,
+      totalAmount: Number(o.total_amount),
+      status: o.status,
+      createdAt: new Date(o.created_at).getTime(),
+      items: o.order_items.map((oi: any) => ({
+        id: oi.id,
+        productId: oi.product_id,
+        productName: oi.products?.name || "Unknown Product",
+        quantity: oi.quantity,
+        priceAtTime: Number(oi.price_at_time),
+        sellerId: oi.seller_id
+      }))
+    }));
+  } catch (error) {
+    console.error("Error fetching buyer orders:", error);
+    return [];
+  }
 }

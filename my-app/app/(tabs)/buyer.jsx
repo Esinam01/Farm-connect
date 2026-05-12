@@ -9,10 +9,13 @@ import {
   Image,
   Modal,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMarketProducts } from "../lib/market-store";
+import { useMarketProducts } from "../../lib/market-store";
+import BottomNav from "../../components/BottomNav";
+import { useAuthStore } from "../../lib/auth-store";
 
 const CATEGORIES = ["All", "Vegetables", "Fruits", "Dairy", "Grains"];
 
@@ -166,6 +169,8 @@ function ProductCard({ product, compact, onAddToCart, isWishlisted, onToggleWish
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function BuyerScreen() {
+  const { initialized } = useAuthStore.useState();
+  const products = useMarketProducts();
   const params = useLocalSearchParams();
   const initialSearch = Array.isArray(params.search) ? params.search[0] : params.search;
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -173,8 +178,16 @@ export default function BuyerScreen() {
   const [cart, setCart] = useState([]);
   const [wishlist, setWishlist] = useState([]);
   const [cartVisible, setCartVisible] = useState(false);
+
+  if (!initialized) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#10b981" />
+      </View>
+    );
+  }
   const [wishlistVisible, setWishlistVisible] = useState(false);
-  const products = useMarketProducts();
+
 
   useEffect(() => {
     if (typeof initialSearch === "string" && initialSearch.trim()) {
@@ -438,6 +451,8 @@ export default function BuyerScreen() {
         </View>
       </ScrollView>
 
+      <BottomNav />
+
       {/* Cart Modal */}
       <CartModal
         visible={cartVisible}
@@ -526,7 +541,7 @@ const styles = StyleSheet.create({
   searchInput:            { flex: 1, height: 44, marginLeft: 8, fontSize: 15, color: "#111827" },
 
   // Content
-  content:                { flex: 1 },
+  content:                { flex: 1, paddingBottom: 120 },
   section:                { marginBottom: 24, paddingHorizontal: 16 },
   sectionHeader:          { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 12 },
   sectionTitle:           { fontSize: 16, fontWeight: "bold", color: "#111827", marginLeft: 0 },

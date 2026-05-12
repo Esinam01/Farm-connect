@@ -9,11 +9,13 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useBuyerSignedUp } from "../../lib/market-store";
-import { requestAdminApproval, useAdminApprovalState } from "../../lib/admin-approval-store";
+import { useBuyerSignedUp, fetchProducts } from "../../lib/market-store";
+import BottomNav from "../../components/BottomNav";
+import { useAuthStore } from "../../lib/auth-store";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -105,71 +107,25 @@ const updates: {
   },
 ];
 
-const navItems: { key: string; label: string; icon: IconName; active?: boolean; action: () => void }[] = [
-  { key: "home", label: "Home", icon: "home", active: true, action: () => router.replace("/") },
-  { key: "seller", label: "Seller", icon: "storefront-outline", action: () => router.push("/seller") },
-  { key: "search", label: "Search", icon: "search", action: () => router.push("/explore") },
-  { key: "buyers", label: "Buyers", icon: "people-outline", action: () => router.push("/buyer") },
-  { key: "account", label: "Account", icon: "person-circle-outline", action: () => router.push("/account") },
-];
-
 export default function HomeScreen() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
-  const [leafTapCount, setLeafTapCount] = useState(0);
-  const [hasOpenedAdmin, setHasOpenedAdmin] = useState(false);
+  const { initialized } = useAuthStore.useState();
   const buyerSignedUp = useBuyerSignedUp();
-  const adminApproval = useAdminApprovalState();
 
   const handleSearchNavigate = () => {
     const query = searchQuery.trim();
     router.push(query ? { pathname: "/explore", params: { query } } : "/explore");
   };
 
+  // Initial data fetch
+
   useEffect(() => {
-    if (adminApproval.approved && !hasOpenedAdmin) {
-      setHasOpenedAdmin(true);
-      Alert.alert("Admin Access Granted", "Approval confirmed. Opening admin dashboard.");
-      router.push("/admin");
-    }
-  }, [adminApproval.approved, hasOpenedAdmin]);
+    fetchProducts();
+  }, []);
 
-  const handleLeafTap = async () => {
-    if (adminApproval.approved) {
-      router.push("/admin");
-      return;
-    }
-
-    const nextCount = leafTapCount + 1;
-    setLeafTapCount(nextCount);
-
-    if (nextCount < 5) {
-      if (nextCount === 4) {
-        Alert.alert("Admin Unlock", "Tap once more to request admin approval.");
-      }
-      return;
-    }
-
-    setLeafTapCount(0);
-    const result = await requestAdminApproval();
-
-    if (!result.ok) {
-      Alert.alert("Approval Error", result.message || "Could not start admin approval.");
-      return;
-    }
-
-    if (result.emailed) {
-      Alert.alert(
-        "Approval Requested",
-        "Verification email sent to marydoo211@gmail.com. Admin opens automatically after approval."
-      );
-      return;
-    }
-
-    Alert.alert(
-      "Approval Pending (Email Not Configured)",
-      `${result.message}${result.approveUrl ? `\n\nManual approve URL:\n${result.approveUrl}` : ""}`
-    );
+  const handleLeafTap = () => {
+    // Hidden leaf tap functionality removed for real role-based auth
   };
 
   const visibleProducts = featuredProducts.filter((product) => {
@@ -182,6 +138,18 @@ export default function HomeScreen() {
       product.farm.toLowerCase().includes(query);
     return matchesCategory && matchesSearch;
   });
+
+  if (!initialized) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" }}>
+        <View style={{ width: 80, height: 80, backgroundColor: "#0f9d58", borderRadius: 40, justifyContent: "center", alignItems: "center", marginBottom: 20 }}>
+          <Ionicons name="leaf" size={40} color="#fff" />
+        </View>
+        <ActivityIndicator size="large" color="#0f9d58" />
+        <Text style={{ marginTop: 12, color: "#64748b", fontSize: 14 }}>Loading FarmConnect...</Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -230,16 +198,7 @@ export default function HomeScreen() {
               ))}
             </View>
 
-            {adminApproval.status === "pending" && (
-              <View style={styles.adminPendingPill}>
-                <Ionicons name="mail-outline" size={13} color="#14532d" />
-                <Text style={styles.adminPendingText}>Admin approval pending</Text>
-              </View>
-            )}
-
-            {adminApproval.status === "error" && (
-              <Text style={styles.adminErrorText}>{adminApproval.errorMessage}</Text>
-            )}
+            {/* Admin status messages removed */}
           </View>
 
           <View style={styles.sectionSpacing}>
@@ -347,24 +306,7 @@ export default function HomeScreen() {
           </View>
         </ScrollView>
 
-        <View style={styles.navBar}>
-          {navItems.map((item) => {
-            const active = item.active;
-            return (
-              <TouchableOpacity
-                key={item.key}
-                onPress={item.action}
-                style={styles.navItem}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.navIconWrap, active && styles.navIconWrapActive]}>
-                  <Ionicons name={item.icon} size={20} color={active ? "#fff" : "#94a3b8"} />
-                </View>
-                <Text style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+        <BottomNav />
       </View>
     </SafeAreaView>
   );
