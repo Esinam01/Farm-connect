@@ -1,0 +1,59 @@
+# Environment variables - NEVER commit these!
+.env
+.env.local
+.env.*.local
+backend/.env
+my-app/.env
+
+# Node modules
+node_modules/
+/node_modules
+
+# Expo
+.expo/
+.expo-shared/
+
+# Build outputs
+dist/
+build/
+*.apk
+*.ipa
+*.app
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temporary files
+tmp/
+temp/
+
+# Lock files (optional - uncomment if team uses different package managers)
+# package-lock.json
+# yarn.lock
+
+# Testing
+coverage/
+.nyc_output/
+
+# Production
+.next/
+out/

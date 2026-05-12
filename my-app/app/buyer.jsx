@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -11,20 +11,8 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router } from "expo-router";
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
-
-const PRODUCTS = [
-  { id: 1, name: "Organic Tomatoes", rating: 4.8, stock: 150, description: "Fresh, organic tomatoes picked daily", farm: "Green Valley Farm, California", price: 4.99, unit: "/lb", image: "https://images.unsplash.com/photo-1546470427-227c7369a9b9?w=300", featured: true, organic: true, category: "Vegetables" },
-  { id: 2, name: "Fresh Apples", rating: 4.9, stock: 200, description: "Crisp and sweet apples from local orchards", farm: "Sunrise Orchards, Washington", price: 3.49, unit: "/lb", image: "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=300", featured: true, organic: true, category: "Fruits" },
-  { id: 3, name: "Free-Range Eggs", rating: 5, stock: 120, description: "Organic eggs from happy free range chickens", farm: "Hilltop Farm, Vermont", price: 6.99, unit: "/dozen", image: "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=300", featured: true, organic: true, category: "Dairy" },
-  { id: 4, name: "Honey", rating: 4.9, stock: 95, description: "Raw, unfiltered local honey", farm: "Prairie Fields, Kansas", price: 12.99, unit: "/jar", image: "https://images.unsplash.com/photo-1587049352846-4a222e784d38?w=300", featured: true, organic: true, category: "Grains" },
-  { id: 5, name: "Farm Fresh Milk", rating: 4.7, stock: 75, description: "Fresh whole milk from grass fed cows", farm: "Happy Cow Dairy, Wisconsin", price: 5.99, unit: "/gallon", image: "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300", featured: false, organic: true, category: "Dairy" },
-  { id: 6, name: "Sweet Corn", rating: 4.6, stock: 180, description: "Sun-ripened sweet corn, harvested fresh", farm: "Sunrise Orchards, Washington", price: 0.99, unit: "/ear", image: "https://images.unsplash.com/photo-1601593346740-925612772716?w=300", featured: false, organic: false, category: "Vegetables" },
-  { id: 7, name: "Wild Blueberries", rating: 4.8, stock: 60, description: "Hand-picked wild blueberries, antioxidant-rich", farm: "Blue Ridge Farm, Maine", price: 8.49, unit: "/pint", image: "https://images.unsplash.com/photo-1498557850523-fd3d118b962e?w=300", featured: false, organic: true, category: "Fruits" },
-  { id: 8, name: "Whole Wheat Flour", rating: 4.5, stock: 90, description: "Stone-ground whole wheat flour, nutrient-dense", farm: "Prairie Fields, Kansas", price: 4.29, unit: "/bag", image: "https://images.unsplash.com/photo-1574323347407-f5e1ad6d020b?w=300", featured: false, organic: false, category: "Grains" },
-];
+import { router, useLocalSearchParams } from "expo-router";
+import { useMarketProducts } from "../lib/market-store";
 
 const CATEGORIES = ["All", "Vegetables", "Fruits", "Dairy", "Grains"];
 
@@ -178,26 +166,40 @@ function ProductCard({ product, compact, onAddToCart, isWishlisted, onToggleWish
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function BuyerScreen() {
+  const params = useLocalSearchParams();
+  const initialSearch = Array.isArray(params.search) ? params.search[0] : params.search;
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const [cart, setCart] = useState([]);
   const [wishlist, setWishlist] = useState([]);
   const [cartVisible, setCartVisible] = useState(false);
   const [wishlistVisible, setWishlistVisible] = useState(false);
+  const products = useMarketProducts();
+
+  useEffect(() => {
+    if (typeof initialSearch === "string" && initialSearch.trim()) {
+      setSearchQuery(initialSearch);
+    }
+  }, [initialSearch]);
 
   // ── Filtered products ──────────────────────────────────────────────────────
   const filteredProducts = useMemo(() => {
-    return PRODUCTS.filter((p) => {
+    const query = searchQuery.trim().toLowerCase();
+    return products.filter((p) => {
       const matchesCategory = selectedCategory === "All" || p.category === selectedCategory;
-      const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        p.farm.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesSearch =
+        !query ||
+        (p.name || "").toLowerCase().includes(query) ||
+        (p.description || "").toLowerCase().includes(query) ||
+        (p.farm || "").toLowerCase().includes(query) ||
+        (p.category || "").toLowerCase().includes(query);
       return matchesCategory && matchesSearch;
     });
-  }, [selectedCategory, searchQuery]);
+  }, [products, selectedCategory, searchQuery]);
 
   // ── Cart helpers ───────────────────────────────────────────────────────────
   const addToCart = (product) => {
+
     setCart((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) {
@@ -232,20 +234,24 @@ export default function BuyerScreen() {
 
   // ── Checkout ───────────────────────────────────────────────────────────────
   const handleCheckout = () => {
+    if (cart.length === 0) {
+      Alert.alert("Empty Cart", "Please add items before checkout");
+      return;
+    }
     setCartVisible(false);
-    Alert.alert(
-      "Order Placed!",
-      `Your order of ${cartCount} item(s) totalling $${cart.reduce((s, i) => s + i.price * i.qty, 0).toFixed(2)} has been placed successfully.`,
-      [{ text: "Great!", onPress: () => setCart([]) }]
-    );
+    // Navigate to checkout screen with cart data
+    router.push({
+      pathname: "/checkout",
+      params: { cart: encodeURIComponent(JSON.stringify(cart)) },
+    });
   };
 
-  const handleLogout = () => {
-    router.replace("/");
+  const handleAccount = () => {
+    router.push("/account");
   };
 
   // ── Wishlisted products ────────────────────────────────────────────────────
-  const wishlistedProducts = PRODUCTS.filter((p) => wishlist.includes(p.id));
+  const wishlistedProducts = products.filter((p) => wishlist.includes(p.id));
 
   return (
     <View style={styles.container}>
@@ -292,7 +298,7 @@ export default function BuyerScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={handleLogout} style={styles.profileButton}>
+          <TouchableOpacity onPress={handleAccount} style={styles.profileButton}>
             <Ionicons name="person-circle" size={32} color="#10b981" />
           </TouchableOpacity>
         </View>
@@ -307,6 +313,7 @@ export default function BuyerScreen() {
           placeholderTextColor="#9ca3af"
           value={searchQuery}
           onChangeText={setSearchQuery}
+          returnKeyType="search"
         />
         {searchQuery.length > 0 && (
           <TouchableOpacity onPress={() => setSearchQuery("")}>
@@ -352,7 +359,7 @@ export default function BuyerScreen() {
               <Text style={styles.sectionTitle}>Featured Products</Text>
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {PRODUCTS.filter((p) => p.featured).map((product) => (
+              {products.filter((p) => p.featured).map((product) => (
                 <ProductCard
                   key={product.id}
                   product={product}

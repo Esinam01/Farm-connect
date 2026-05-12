@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useAdminApprovalState } from "../../lib/admin-approval-store";
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 
@@ -330,6 +331,7 @@ function OrdersTab({ orders, setOrders }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function AdminScreen() {
+  const adminApproval = useAdminApprovalState();
   const [activeTab, setActiveTab] = useState("Overview");
   const [users, setUsers] = useState(mockUsers);
   const [products, setProducts] = useState(mockProducts);
@@ -338,6 +340,29 @@ export default function AdminScreen() {
   const handleLogout = () => {
     router.replace("/");
   };
+
+  if (!adminApproval.approved) {
+    return (
+      <View style={styles.lockedContainer}>
+        <View style={styles.lockedCard}>
+          <Ionicons name="lock-closed" size={34} color="#7c3aed" />
+          <Text style={styles.lockedTitle}>Admin Access Hidden</Text>
+          <Text style={styles.lockedText}>
+            Tap the leaf icon 5 times on home to request approval from marydoo211@gmail.com.
+          </Text>
+          {adminApproval.status === "pending" && (
+            <Text style={styles.lockedPending}>Approval is pending. This page unlocks automatically once approved.</Text>
+          )}
+          {adminApproval.status === "error" && (
+            <Text style={styles.lockedError}>{adminApproval.errorMessage}</Text>
+          )}
+          <TouchableOpacity style={styles.lockedButton} onPress={() => router.replace("/")}>
+            <Text style={styles.lockedButtonText}>Back to Home</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -472,6 +497,14 @@ export default function AdminScreen() {
 
 const styles = StyleSheet.create({
   container:        { flex: 1, backgroundColor: "#f5f3ff" },
+  lockedContainer:  { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "#f5f3ff", padding: 20 },
+  lockedCard:       { width: "100%", maxWidth: 420, backgroundColor: "#fff", borderRadius: 16, padding: 20, alignItems: "center" },
+  lockedTitle:      { marginTop: 12, fontSize: 20, fontWeight: "700", color: "#111827" },
+  lockedText:       { marginTop: 10, textAlign: "center", fontSize: 14, lineHeight: 21, color: "#6b7280" },
+  lockedPending:    { marginTop: 10, textAlign: "center", fontSize: 13, color: "#7c3aed", fontWeight: "600" },
+  lockedError:      { marginTop: 10, textAlign: "center", fontSize: 12, color: "#dc2626" },
+  lockedButton:     { marginTop: 18, backgroundColor: "#7c3aed", borderRadius: 10, paddingHorizontal: 16, paddingVertical: 10 },
+  lockedButtonText: { color: "#fff", fontWeight: "700" },
 
   // Header
   header:           { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 16, paddingTop: 50, paddingBottom: 16, backgroundColor: "#c026d3" },

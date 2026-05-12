@@ -324,8 +324,8 @@ export default function FarmAlertSystem() {
     return () => {
       // Always stop vibration when leaving the screen
       VibManager.stop();
-      Notifications.removeNotificationSubscription(notifListener.current);
-      Notifications.removeNotificationSubscription(respListener.current);
+      notifListener.current?.remove?.();
+      respListener.current?.remove?.();
     };
   }, []);
 
@@ -339,12 +339,15 @@ export default function FarmAlertSystem() {
     };
     const a = { id: uid(), zone, severity, message: msgs[severity], timestamp: new Date().toISOString(), status: "active", source };
     setAlerts(prev => [a, ...prev]);
-    setAlertsSilenced(false); // show the stop button again for new alert
-
-    // Start our controlled vibration loop
-    if (vibOn) VibManager.start(severity);
-
-    if (pushOn) fireLocalNotification(zone, severity, soundOn);
+    // Only show stop button for CRITICAL alerts or if user hasn't manually stopped
+    if (severity === "critical" || !alertsSilenced) {
+      setAlertsSilenced(false);
+      if (vibOn) VibManager.start(severity);
+      if (pushOn) fireLocalNotification(zone, severity, soundOn);
+    } else {
+      // User has stopped alerts - don't restart vibration or sound for non-critical
+      VibManager.stop();
+    }
     notifyBackend(zone, severity, pushToken);
   };
 
@@ -356,6 +359,8 @@ export default function FarmAlertSystem() {
       await Notifications.dismissAllNotificationsAsync();
       await Notifications.cancelAllScheduledNotificationsAsync();
     } catch (_) {}
+    // Mark all currently active alerts as dismissed to prevent re-triggering
+    setAlerts(prev => prev.map(a => a.status === "active" ? { ...a, status: "dismissed" } : a));
   };
 
   // ── Alert actions ──────────────────────────────────────────────────────────
@@ -654,7 +659,7 @@ export default function FarmAlertSystem() {
           <Text style={styles.hardwareCardTitle}>Connect Your Backend</Text>
         </View>
         <Text style={styles.hardwareCardText}>
-          Replace <Text style={styles.hardwareBold}>YOUR_BACKEND_URL</Text> in the <Text style={styles.hardwareBold}>notifyBackend</Text> function at the top of this file. Your ESP32/Arduino should POST to the same URL with <Text style={styles.hardwareBold}>zone</Text>, <Text style={styles.hardwareBold}>severity</Text>, and <Text style={styles.hardwareBold}>source: "sensor"</Text> in the body.
+          Replace <Text style={styles.hardwareBold}>YOUR_BACKEND_URL</Text> in the <Text style={styles.hardwareBold}>notifyBackend</Text> function at the top of this file. Your ESP32/Arduino should POST to the same URL with <Text style={styles.hardwareBold}>zone</Text>, <Text style={styles.hardwareBold}>severity</Text>, and <Text style={styles.hardwareBold}>{'source: "sensor"'}</Text> in the body.
         </Text>
       </View>
       <View style={{ height: 120 }} />

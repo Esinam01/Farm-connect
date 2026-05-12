@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
@@ -13,12 +14,14 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
+import { addMarketProduct, deleteMarketProduct, nextMarketProductId, updateMarketProduct } from "../lib/market-store";
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
 
 const INITIAL_PRODUCTS = [
-  { id: 1, name: "Organic Tomatoes", price: "4.99", unit: "lb",     stock: 150, sold: 450, category: "Vegetables", description: "Fresh, organic tomatoes picked daily" },
-  { id: 2, name: "Mixed Vegetables", price: "8.99", unit: "basket", stock: 80,  sold: 220, category: "Vegetables", description: "A fresh mix of seasonal vegetables"    },
+  { id: 1, name: "Organic Tomatoes", price: "4.99", unit: "lb",     stock: 150, sold: 450, category: "Vegetables", description: "Fresh, organic tomatoes picked daily", image: "https://images.unsplash.com/photo-1546470427-227c7369a9b9?w=300&fit=crop" },
+  { id: 2, name: "Mixed Vegetables", price: "8.99", unit: "basket", stock: 80,  sold: 220, category: "Vegetables", description: "A fresh mix of seasonal vegetables", image: "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=300&fit=crop" },
 ];
 
 const CATEGORIES = ["Vegetables", "Fruits", "Dairy", "Grains", "Poultry", "Other"];
@@ -29,15 +32,17 @@ const UNITS      = ["lb", "kg", "basket", "dozen", "gallon", "jar", "bag", "ear"
 const calcRevenue  = (price, sold) => (parseFloat(price || 0) * (sold || 0)).toFixed(2);
 const totalRevenue = (products)    => products.reduce((sum, p) => sum + parseFloat(p.price) * p.sold, 0).toFixed(2);
 const totalSold    = (products)    => products.reduce((sum, p) => sum + p.sold, 0);
-const emptyForm    = ()            => ({ name: "", price: "", unit: "lb", stock: "", category: "Vegetables", description: "" });
+const emptyForm    = ()            => ({ name: "", price: "", unit: "lb", stock: "", category: "Vegetables", description: "", image: "" });
 
 // ─── Product Form Modal ───────────────────────────────────────────────────────
 
 function ProductFormModal({ visible, onClose, onSave, editProduct }) {
   const [form,   setForm]   = useState(emptyForm());
   const [errors, setErrors] = useState({});
+  const [imageError, setImageError] = useState("");
+    const [uploadingImage, setUploadingImage] = useState(false);
 
-  useState(() => {
+  useEffect(() => {
     if (editProduct) {
       setForm({
         name:        editProduct.name,
@@ -46,11 +51,13 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
         stock:       String(editProduct.stock),
         category:    editProduct.category,
         description: editProduct.description || "",
+        image:       editProduct.image || "",
       });
     } else {
       setForm(emptyForm());
     }
     setErrors({});
+    setImageError("");
   }, [editProduct, visible]);
 
   const set = (key, value) => {
@@ -69,6 +76,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
 
   const handleSave = () => {
     if (!validate()) return;
+    const imageUrl = form.image.trim() || `https://images.unsplash.com/photo-1540420773420-3366772f4999?w=300&fit=crop`;
     onSave({
       name:        form.name.trim(),
       price:       parseFloat(form.price).toFixed(2),
@@ -76,12 +84,66 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
       stock:       parseInt(form.stock),
       category:    form.category,
       description: form.description.trim(),
+      image:       imageUrl,
     });
     setForm(emptyForm());
     setErrors({});
+    setImageError("");
   };
 
-  const handleClose = () => { setForm(emptyForm()); setErrors({}); onClose(); };
+  const handleClose = () => { setForm(emptyForm()); setErrors({}); setImageError(""); onClose(); };
+
+  const validateImageUrl = (url) => {
+    if (!url.trim()) {
+      setImageError("");
+      return;
+    }
+    try {
+      new URL(url);
+      setImageError("");
+    } catch (_e) {
+      setImageError("Please enter a valid image URL");
+    }
+  };
+
+    const pickImage = async () => {
+      try {
+        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          Alert.alert("Permission Denied", "We need access to your photo library to upload images.");
+          return;
+        }
+
+        const result = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.8,
+        });
+
+        if (!result.canceled) {
+          setUploadingImage(true);
+          try {
+            const response = await fetch(result.assets[0].uri);
+            const blob = await response.blob();
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64 = reader.result;
+              set("image", base64);
+              setImageError("");
+              setUploadingImage(false);
+            };
+            reader.readAsDataURL(blob);
+          } catch (error) {
+            setUploadingImage(false);
+            Alert.alert("Error", "Failed to process image: " + error.message);
+          }
+        }
+      } catch (error) {
+        setUploadingImage(false);
+        Alert.alert("Error", "Failed to pick image: " + error.message);
+      }
+    };
 
   return (
     <Modal visible={visible} animationType="slide" transparent>
@@ -180,6 +242,47 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
                 />
               </View>
 
+              {/* Image URL */}
+              <View style={styles.fieldGroup}>
+                <Text style={styles.fieldLabel}>Product Image URL</Text>
+                <TextInput
+                  style={[styles.input, imageError && styles.inputError]}
+                  placeholder="https://example.com/image.jpg"
+                  placeholderTextColor="#9ca3af"
+                  value={form.image}
+                  onChangeText={(v) => {
+                    set("image", v);
+                    validateImageUrl(v);
+                  }}
+                />
+                {imageError && <Text style={styles.errorText}>{imageError}</Text>}
+                <Text style={styles.helperText}>Optional: Paste a direct image URL to customize the product image</Text>
+              </View>
+
+                {/* Upload Image Button */}
+                <TouchableOpacity 
+                  style={styles.uploadImageBtn} 
+                  onPress={pickImage}
+                  disabled={uploadingImage}
+                >
+                  <Ionicons name={uploadingImage ? "hourglass-outline" : "cloud-upload-outline"} size={18} color="#fff" />
+                  <Text style={styles.uploadImageBtnText}>
+                    {uploadingImage ? "Processing..." : "Upload Image from Device"}
+                  </Text>
+                </TouchableOpacity>
+
+              {/* Image Preview */}
+              {form.image.trim() && !imageError && (
+                <View style={styles.imagePreviewContainer}>
+                  <Text style={styles.imagePreviewLabel}>Image Preview</Text>
+                  <Image
+                    source={{ uri: form.image }}
+                    style={styles.imagePreview}
+                    onError={() => setImageError("Failed to load image")}
+                  />
+                </View>
+              )}
+
               {/* Price preview */}
               {form.price && form.unit && !isNaN(form.price) && parseFloat(form.price) > 0 && (
                 <View style={styles.previewBadge}>
@@ -222,9 +325,30 @@ export default function SellerScreen() {
   const handleSave = (formData) => {
     if (editProduct) {
       setProducts((prev) => prev.map((p) => p.id === editProduct.id ? { ...p, ...formData } : p));
+      updateMarketProduct(editProduct.id, {
+        ...formData,
+        price: parseFloat(formData.price),
+        stock: parseInt(formData.stock),
+        unit: `/${formData.unit}`,
+      });
       Alert.alert("Updated", `"${formData.name}" has been updated.`);
     } else {
-      setProducts((prev) => [...prev, { id: Date.now(), sold: 0, ...formData }]);
+      const newProduct = { id: nextMarketProductId(), sold: 0, rating: 4.5, farm: "Local Farm", featured: false, organic: true, ...formData };
+      setProducts((prev) => [...prev, newProduct]);
+      addMarketProduct({
+        id: newProduct.id,
+        name: newProduct.name,
+        rating: 4.5,
+        stock: newProduct.stock,
+        description: newProduct.description,
+        farm: newProduct.farm,
+        price: parseFloat(newProduct.price),
+        unit: `/${newProduct.unit}`,
+        image: newProduct.image,
+        featured: false,
+        organic: true,
+        category: newProduct.category,
+      });
       Alert.alert("Added", `"${formData.name}" has been added to your listings.`);
     }
     setModalVisible(false);
@@ -234,7 +358,7 @@ export default function SellerScreen() {
   const handleDelete = (product) => {
     Alert.alert("Delete Product", `Are you sure you want to delete "${product.name}"?`, [
       { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => setProducts((prev) => prev.filter((p) => p.id !== product.id)) },
+      { text: "Delete", style: "destructive", onPress: () => { setProducts((prev) => prev.filter((p) => p.id !== product.id)); deleteMarketProduct(product.id); } },
     ]);
   };
 
@@ -362,7 +486,7 @@ export default function SellerScreen() {
             <View style={styles.emptyState}>
               <Ionicons name="cube-outline" size={56} color="#d1d5db" />
               <Text style={styles.emptyText}>No products yet</Text>
-              <Text style={styles.emptySub}>Tap "Add New Product" to get started</Text>
+              <Text style={styles.emptySub}>Tap Add New Product to get started</Text>
             </View>
           ) : (
             <>
@@ -378,9 +502,14 @@ export default function SellerScreen() {
               {products.map((product, index) => (
                 <View key={product.id} style={[styles.tableRow, index % 2 === 0 && styles.tableRowAlt]}>
                   <View style={{ flex: 2.2 }}>
-                    <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
-                    <View style={styles.categoryBadge}>
-                      <Text style={styles.categoryBadgeText}>{product.category}</Text>
+                    <View style={styles.productThumbRow}>
+                      <Image source={{ uri: product.image }} style={styles.productThumb} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
+                        <View style={styles.categoryBadge}>
+                          <Text style={styles.categoryBadgeText}>{product.category}</Text>
+                        </View>
+                      </View>
                     </View>
                   </View>
                   <Text style={[styles.tdCell, { flex: 1.4 }]}>${product.price}/{product.unit}</Text>
@@ -486,6 +615,8 @@ const styles = StyleSheet.create({
   tableRow:             { flexDirection: "row", alignItems: "center", paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: "#f3f4f6" },
   tableRowAlt:          { backgroundColor: "#fafafa" },
   tdCell:               { fontSize: 13, color: "#374151" },
+  productThumbRow:      { flexDirection: "row", alignItems: "center", gap: 10 },
+  productThumb:         { width: 40, height: 40, borderRadius: 10, backgroundColor: "#e5e7eb" },
   productName:          { fontSize: 13, fontWeight: "600", color: "#10b981" },
   categoryBadge:        { marginTop: 3, alignSelf: "flex-start", backgroundColor: "#dcfce7", paddingHorizontal: 6, paddingVertical: 2, borderRadius: 10 },
   categoryBadgeText:    { fontSize: 10, color: "#16a34a", fontWeight: "600" },
@@ -525,6 +656,15 @@ const styles = StyleSheet.create({
 
   previewBadge:         { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#f0fdf4", padding: 10, borderRadius: 8, marginBottom: 16 },
   previewText:          { fontSize: 13, color: "#10b981", fontWeight: "600" },
+  
+  imagePreviewContainer: { marginBottom: 16, borderRadius: 12, overflow: "hidden", backgroundColor: "#f3f4f6", borderWidth: 1, borderColor: "#e5e7eb" },
+  imagePreviewLabel:    { fontSize: 13, fontWeight: "600", color: "#374151", padding: 12, paddingBottom: 8 },
+  imagePreview:         { width: "100%", height: 200, backgroundColor: "#e5e7eb", resizeMode: "cover" },
+  helperText:           { fontSize: 12, color: "#9ca3af", marginTop: 6, fontStyle: "italic" },
+
+    uploadImageBtn:       { flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: "#3b82f6", paddingVertical: 12, borderRadius: 12, gap: 8, marginBottom: 12, marginTop: 4 },
+    uploadImageBtnText:   { color: "#fff", fontSize: 14, fontWeight: "600" },
+  
   saveBtn:              { flexDirection: "row", justifyContent: "center", alignItems: "center", backgroundColor: "#10b981", paddingVertical: 14, borderRadius: 12, gap: 8, marginBottom: 8 },
   saveBtnText:          { color: "#fff", fontSize: 16, fontWeight: "bold" },
 });

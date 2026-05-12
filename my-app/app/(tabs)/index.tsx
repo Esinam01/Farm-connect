@@ -1,324 +1,778 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   View,
   Text,
+  Image,
   TextInput,
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  SafeAreaView,
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
+import { useBuyerSignedUp } from "../../lib/market-store";
+import { requestAdminApproval, useAdminApprovalState } from "../../lib/admin-approval-store";
 
-export default function LoginScreen() {
-  const [selectedRole, setSelectedRole] = useState("buyer");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
-  const roles = [
-    { id: "buyer", label: "Buyer", icon: "person-outline" },
-    { id: "seller", label: "Seller", icon: "storefront-outline" },
-    { id: "admin", label: "Admin", icon: "shield-checkmark-outline" },
-  ];
+const featurePills = ["100% Fresh", "Farm Direct", "Fast Delivery"];
+const categories = ["All", "Vegetables", "Fruits", "Dairy"];
 
-  const features = [
-    "100% Fresh Products",
-    "Direct from Farm",
-    "Support Local Farmers",
-  ];
+const featuredProducts = [
+  {
+    id: 1,
+    name: "Organic Tomatoes",
+    price: 4.99,
+    unit: "lb",
+    category: "Vegetables",
+    farm: "California",
+    rating: 4.8,
+    image:
+      "https://images.unsplash.com/photo-1546470427-227c7369a9b9?w=300&fit=crop",
+    organic: true,
+  },
+  {
+    id: 2,
+    name: "Fresh Apples",
+    price: 3.49,
+    unit: "lb",
+    category: "Fruits",
+    farm: "Washington",
+    rating: 4.9,
+    image:
+      "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=300&fit=crop",
+    organic: true,
+  },
+  {
+    id: 3,
+    name: "Farm Fresh Milk",
+    price: 5.99,
+    unit: "gallon",
+    category: "Dairy",
+    farm: "Wisconsin",
+    rating: 4.7,
+    image:
+      "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300&fit=crop",
+    organic: true,
+  },
+  {
+    id: 4,
+    name: "Free-Range Eggs",
+    price: 6.99,
+    unit: "dozen",
+    category: "Dairy",
+    farm: "Vermont",
+    rating: 5,
+    image:
+      "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=300&fit=crop",
+    organic: true,
+  },
+];
 
-  const handleSubmit = () => {
-    if (!email || !password) {
-      Alert.alert("Error", "Please enter email and password");
+const updates: {
+  id: number;
+  title: string;
+  time: string;
+  icon: IconName;
+  tint: string;
+  background: string;
+}[] = [
+  {
+    id: 1,
+    title: "Organic produce prices up 15% this week due to high demand",
+    time: "2h ago",
+    icon: "trending-up",
+    tint: "#16a34a",
+    background: "#ecfdf5",
+  },
+  {
+    id: 2,
+    title: "Perfect weather for spring planting starting next week",
+    time: "5h ago",
+    icon: "cloud-outline",
+    tint: "#2563eb",
+    background: "#eff6ff",
+  },
+  {
+    id: 3,
+    title: "New delivery routes now cover three more local farms",
+    time: "1d ago",
+    icon: "location-outline",
+    tint: "#f59e0b",
+    background: "#fff7ed",
+  },
+];
+
+const navItems: { key: string; label: string; icon: IconName; active?: boolean; action: () => void }[] = [
+  { key: "home", label: "Home", icon: "home", active: true, action: () => router.replace("/") },
+  { key: "seller", label: "Seller", icon: "storefront-outline", action: () => router.push("/seller") },
+  { key: "search", label: "Search", icon: "search", action: () => router.push("/explore") },
+  { key: "buyers", label: "Buyers", icon: "people-outline", action: () => router.push("/buyer") },
+  { key: "account", label: "Account", icon: "person-circle-outline", action: () => router.push("/account") },
+];
+
+export default function HomeScreen() {
+  const [selectedCategory, setSelectedCategory] = useState("All");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [leafTapCount, setLeafTapCount] = useState(0);
+  const [hasOpenedAdmin, setHasOpenedAdmin] = useState(false);
+  const buyerSignedUp = useBuyerSignedUp();
+  const adminApproval = useAdminApprovalState();
+
+  const handleSearchNavigate = () => {
+    const query = searchQuery.trim();
+    router.push(query ? { pathname: "/explore", params: { query } } : "/explore");
+  };
+
+  useEffect(() => {
+    if (adminApproval.approved && !hasOpenedAdmin) {
+      setHasOpenedAdmin(true);
+      Alert.alert("Admin Access Granted", "Approval confirmed. Opening admin dashboard.");
+      router.push("/admin");
+    }
+  }, [adminApproval.approved, hasOpenedAdmin]);
+
+  const handleLeafTap = async () => {
+    if (adminApproval.approved) {
+      router.push("/admin");
       return;
     }
 
-    // Navigate based on selected role
-    if (selectedRole === "buyer") {
-      router.push("/buyer");
-    } else if (selectedRole === "seller") {
-      router.push("/seller");
-    } else if (selectedRole === "admin") {
-      router.push("/admin");
+    const nextCount = leafTapCount + 1;
+    setLeafTapCount(nextCount);
+
+    if (nextCount < 5) {
+      if (nextCount === 4) {
+        Alert.alert("Admin Unlock", "Tap once more to request admin approval.");
+      }
+      return;
     }
+
+    setLeafTapCount(0);
+    const result = await requestAdminApproval();
+
+    if (!result.ok) {
+      Alert.alert("Approval Error", result.message || "Could not start admin approval.");
+      return;
+    }
+
+    if (result.emailed) {
+      Alert.alert(
+        "Approval Requested",
+        "Verification email sent to marydoo211@gmail.com. Admin opens automatically after approval."
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Approval Pending (Email Not Configured)",
+      `${result.message}${result.approveUrl ? `\n\nManual approve URL:\n${result.approveUrl}` : ""}`
+    );
   };
 
+  const visibleProducts = featuredProducts.filter((product) => {
+    const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch =
+      !query ||
+      product.name.toLowerCase().includes(query) ||
+      product.category.toLowerCase().includes(query) ||
+      product.farm.toLowerCase().includes(query);
+    return matchesCategory && matchesSearch;
+  });
+
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      {/* Branding Section */}
-      <View style={styles.brandingSection}>
-        <View style={styles.logoContainer}>
-          <View style={styles.logoIcon}>
-            <Ionicons name="leaf" size={28} color="#fff" />
-          </View>
-          <Text style={styles.logoText}>FarmConnect</Text>
-        </View>
-
-        <Text style={styles.tagline}>
-          Connecting farmers and consumers for a sustainable future
-        </Text>
-
-        {/* Features */}
-        <View style={styles.featuresContainer}>
-          {features.map((feature) => (
-            <View key={feature} style={styles.featureItem}>
-              <View style={styles.checkCircle}>
-                <Ionicons name="checkmark" size={16} color="#fff" />
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.screen}>
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+          <View style={styles.hero}>
+            <View style={styles.topRow}>
+              <View style={styles.brandBlock}>
+                <TouchableOpacity style={styles.logoIcon} onPress={handleLeafTap}>
+                  <Ionicons name="leaf" size={22} color="#fff" />
+                </TouchableOpacity>
+                <View>
+                  <Text style={styles.brandTitle}>FarmConnect</Text>
+                  <Text style={styles.brandSubtitle}>Fresh from Farm to You</Text>
+                </View>
               </View>
-              <Text style={styles.featureText}>{feature}</Text>
+              <TouchableOpacity style={styles.alertButton}>
+                <Ionicons name="notifications-outline" size={20} color="#fff" />
+              </TouchableOpacity>
             </View>
-          ))}
-        </View>
 
-        {/* Testimonial */}
-        <View style={styles.testimonial}>
-          <Text style={styles.testimonialText}>
-            "FarmConnect has transformed how we reach customers. Our sales have
-            increased by 300%!"
-          </Text>
-          <Text style={styles.testimonialAuthor}>- Sarah, Green Valley Farm</Text>
-        </View>
-      </View>
+            <Text style={styles.heroText}>Discover fresh produce from local farms nearby.</Text>
 
-      {/* Login Form Section */}
-      <View style={styles.formSection}>
-        <Text style={styles.welcomeText}>Welcome Back</Text>
-        <Text style={styles.subtitleText}>
-          Select your role and sign in to continue
-        </Text>
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={18} color="#94a3b8" />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Search for fresh products..."
+                placeholderTextColor="#94a3b8"
+                style={styles.searchInput}
+                returnKeyType="search"
+                onSubmitEditing={handleSearchNavigate}
+              />
+              <TouchableOpacity onPress={handleSearchNavigate} style={styles.searchGoButton}>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
+              </TouchableOpacity>
+            </View>
 
-        {/* Role Selection */}
-        <Text style={styles.label}>Login as</Text>
-        <View style={styles.roleContainer}>
-          {roles.map((role) => {
-            const isSelected = selectedRole === role.id;
+            <View style={styles.pillRow}>
+              {featurePills.map((pill) => (
+                <View key={pill} style={styles.featurePill}>
+                  <Ionicons name="checkmark" size={13} color="#fff" />
+                  <Text style={styles.featurePillText}>{pill}</Text>
+                </View>
+              ))}
+            </View>
+
+            {adminApproval.status === "pending" && (
+              <View style={styles.adminPendingPill}>
+                <Ionicons name="mail-outline" size={13} color="#14532d" />
+                <Text style={styles.adminPendingText}>Admin approval pending</Text>
+              </View>
+            )}
+
+            {adminApproval.status === "error" && (
+              <Text style={styles.adminErrorText}>{adminApproval.errorMessage}</Text>
+            )}
+          </View>
+
+          <View style={styles.sectionSpacing}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
+              {categories.map((category) => {
+                const active = selectedCategory === category;
+                return (
+                  <TouchableOpacity
+                    key={category}
+                    onPress={() => setSelectedCategory(category)}
+                    style={[styles.categoryChip, active && styles.categoryChipActive]}
+                  >
+                    <Text style={[styles.categoryText, active && styles.categoryTextActive]}>{category}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          <View style={styles.weatherCard}>
+            <View style={styles.weatherHeader}>
+              <View>
+                <Text style={styles.weatherLabel}>Your Area</Text>
+                <Text style={styles.weatherTemp}>72° <Text style={styles.weatherUnit}>F</Text></Text>
+                <Text style={styles.weatherState}>Partly Cloudy</Text>
+              </View>
+              <Ionicons name="partly-sunny-outline" size={52} color="rgba(255,255,255,0.75)" />
+            </View>
+            <View style={styles.weatherMeta}>
+              <View style={styles.metaItem}>
+                <Ionicons name="water-outline" size={14} color="#e0f2fe" />
+                <Text style={styles.metaText}>65% humidity</Text>
+              </View>
+              <View style={styles.metaItem}>
+                <Ionicons name="navigate-outline" size={14} color="#e0f2fe" />
+                <Text style={styles.metaText}>8 mph wind</Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.updatesSection}>
+            <View style={styles.sectionTitleRow}>
+              <Ionicons name="newspaper-outline" size={18} color="#16a34a" />
+              <Text style={styles.sectionTitle}>Latest Updates</Text>
+            </View>
+
+            {updates.map((update) => (
+              <View key={update.id} style={styles.updateCard}>
+                <View style={[styles.updateIcon, { backgroundColor: update.background }]}>
+                  <Ionicons name={update.icon} size={16} color={update.tint} />
+                </View>
+                <View style={styles.updateBody}>
+                  <Text style={styles.updateText}>{update.title}</Text>
+                  <Text style={styles.updateTime}>{update.time}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+
+          <View style={styles.productsSection}>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.productsTitle}>Fresh Products</Text>
+                <Text style={styles.productsSubtitle}>{visibleProducts.length} items available</Text>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedCategory("All")}> 
+                <Text style={styles.clearFilterText}>Reset</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.productGrid}>
+              {visibleProducts.map((product) => (
+                <View key={product.id} style={styles.productCard}>
+                  <View style={styles.productImageWrap}>
+                    <Text style={styles.productBadge}>Organic</Text>
+                    <Image source={{ uri: product.image }} style={styles.productImage} />
+                  </View>
+                  <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
+                  <View style={styles.productMetaRow}>
+                    <Ionicons name="star" size={12} color="#f59e0b" />
+                    <Text style={styles.productMetaText}>{product.rating}</Text>
+                    <Text style={styles.productMetaText}>• {product.farm}</Text>
+                  </View>
+                  <View style={styles.productBottomRow}>
+                    <View>
+                      <Text style={styles.productPrice}>${product.price.toFixed(2)}</Text>
+                      <Text style={styles.productUnit}>per {product.unit}</Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.addButton}
+                      onPress={() => {
+                        if (buyerSignedUp) {
+                          router.push("/buyer");
+                        } else {
+                          router.push("/signup?role=buyer&next=/buyer");
+                        }
+                      }}
+                    >
+                      <Ionicons name="add" size={18} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        </ScrollView>
+
+        <View style={styles.navBar}>
+          {navItems.map((item) => {
+            const active = item.active;
             return (
               <TouchableOpacity
-                key={role.id}
-                onPress={() => setSelectedRole(role.id)}
-                style={[
-                  styles.roleButton,
-                  isSelected && styles.roleButtonSelected,
-                ]}
+                key={item.key}
+                onPress={item.action}
+                style={styles.navItem}
+                activeOpacity={0.8}
               >
-                <Ionicons
-                  name={role.icon}
-                  size={24}
-                  color={isSelected ? "#fff" : "#6b7280"}
-                />
-                <Text
-                  style={[
-                    styles.roleLabel,
-                    isSelected && styles.roleLabelSelected,
-                  ]}
-                >
-                  {role.label}
-                </Text>
+                <View style={[styles.navIconWrap, active && styles.navIconWrapActive]}>
+                  <Ionicons name={item.icon} size={20} color={active ? "#fff" : "#94a3b8"} />
+                </View>
+                <Text style={[styles.navLabel, active && styles.navLabelActive]}>{item.label}</Text>
               </TouchableOpacity>
             );
           })}
         </View>
-
-        {/* Email Input */}
-        <Text style={styles.label}>Email Address</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your email"
-          placeholderTextColor="#9ca3af"
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-
-        {/* Password Input */}
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Enter your password"
-          placeholderTextColor="#9ca3af"
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-        />
-
-        {/* Submit Button */}
-        <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-          <Text style={styles.submitButtonText}>
-            Sign In as {selectedRole.charAt(0).toUpperCase() + selectedRole.slice(1)}
-          </Text>
-        </TouchableOpacity>
-
-        {/* Sign Up Link */}
-        <View style={styles.signUpContainer}>
-          <Text style={styles.signUpText}>Don't have an account? </Text>
-          <TouchableOpacity>
-            <Text style={styles.signUpLink}>Sign up</Text>
-          </TouchableOpacity>
-        </View>
       </View>
-    </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: "#059669",
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
   },
-  brandingSection: {
-    padding: 24,
-    paddingTop: 60,
+  screen: {
+    flex: 1,
+    backgroundColor: "#f8fafc",
   },
-  logoContainer: {
+  content: {
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 132,
+  },
+  hero: {
+    backgroundColor: "#0f9d58",
+    borderRadius: 28,
+    padding: 18,
+    shadowColor: "#064e3b",
+    shadowOffset: { width: 0, height: 14 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 5,
+  },
+  topRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  brandBlock: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 16,
+    gap: 12,
   },
   logoIcon: {
-    width: 48,
-    height: 48,
-    backgroundColor: "rgba(255,255,255,0.2)",
+    width: 40,
+    height: 40,
     borderRadius: 12,
-    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
     alignItems: "center",
-    marginRight: 12,
+    justifyContent: "center",
   },
-  logoText: {
-    fontSize: 28,
-    fontWeight: "bold",
+  brandTitle: {
     color: "#fff",
+    fontSize: 22,
+    fontWeight: "800",
+    letterSpacing: 0.2,
   },
-  tagline: {
-    fontSize: 18,
+  brandSubtitle: {
     color: "#d1fae5",
+    marginTop: 2,
+    fontSize: 12,
+  },
+  alertButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroText: {
+    color: "#ecfdf5",
+    fontSize: 18,
     lineHeight: 26,
-    marginBottom: 24,
+    marginTop: 18,
+    marginBottom: 16,
+    maxWidth: 280,
   },
-  featuresContainer: {
-    marginBottom: 24,
-  },
-  featureItem: {
+  searchBox: {
     flexDirection: "row",
     alignItems: "center",
+    gap: 10,
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    height: 50,
+  },
+  searchInput: {
+    flex: 1,
+    color: "#0f172a",
+    fontSize: 14,
+  },
+  searchGoButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#16a34a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pillRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16,
+  },
+  featurePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.16)",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 999,
+    gap: 6,
+  },
+  featurePillText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  adminPendingPill: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    backgroundColor: "#dcfce7",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  adminPendingText: {
+    fontSize: 12,
+    color: "#14532d",
+    fontWeight: "700",
+  },
+  adminErrorText: {
+    marginTop: 10,
+    color: "#fecaca",
+    fontSize: 11,
+    lineHeight: 16,
+    maxWidth: 300,
+  },
+  sectionSpacing: {
+    marginTop: 16,
+  },
+  categoryRow: {
+    gap: 10,
+    paddingRight: 6,
+  },
+  categoryChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: "#eef2f7",
+  },
+  categoryChipActive: {
+    backgroundColor: "#16a34a",
+  },
+  categoryText: {
+    color: "#475569",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  categoryTextActive: {
+    color: "#fff",
+  },
+  weatherCard: {
+    marginTop: 18,
+    borderRadius: 22,
+    backgroundColor: "#0d8ce0",
+    padding: 16,
+  },
+  weatherHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  weatherLabel: {
+    color: "#dbeafe",
+    fontSize: 12,
+    marginBottom: 6,
+  },
+  weatherTemp: {
+    color: "#fff",
+    fontSize: 42,
+    fontWeight: "700",
+    lineHeight: 46,
+  },
+  weatherUnit: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  weatherState: {
+    color: "#eff6ff",
+    fontSize: 15,
+    marginTop: 4,
+  },
+  weatherMeta: {
+    flexDirection: "row",
+    gap: 18,
+    marginTop: 18,
+    flexWrap: "wrap",
+  },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  metaText: {
+    color: "#eff6ff",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  updatesSection: {
+    marginTop: 18,
+    gap: 12,
+  },
+  productsSection: {
+    marginTop: 18,
+  },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
     marginBottom: 12,
   },
-  checkCircle: {
-    width: 32,
-    height: 32,
-    backgroundColor: "rgba(52, 211, 153, 0.3)",
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
+  productsTitle: {
+    color: "#0f172a",
+    fontSize: 18,
+    fontWeight: "800",
   },
-  featureText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "500",
+  productsSubtitle: {
+    color: "#64748b",
+    fontSize: 12,
+    marginTop: 4,
   },
-  testimonial: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
+  clearFilterText: {
+    color: "#16a34a",
+    fontSize: 13,
+    fontWeight: "700",
   },
-  testimonialText: {
-    color: "#ecfdf5",
-    fontStyle: "italic",
-    marginBottom: 8,
-    lineHeight: 22,
-  },
-  testimonialAuthor: {
-    color: "#fff",
-    fontWeight: "600",
-  },
-  formSection: {
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 32,
-    borderTopRightRadius: 32,
-    padding: 24,
-    flex: 1,
-  },
-  welcomeText: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#111827",
-    marginBottom: 8,
-  },
-  subtitleText: {
-    color: "#6b7280",
-    marginBottom: 24,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
-    marginBottom: 8,
-  },
-  roleContainer: {
+  productGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
     gap: 12,
-    marginBottom: 20,
   },
-  roleButton: {
+  productCard: {
+    width: "48%",
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    overflow: "hidden",
+    paddingBottom: 12,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  productImageWrap: {
+    height: 118,
+    padding: 10,
+    justifyContent: "space-between",
+    position: "relative",
+  },
+  productBadge: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    alignSelf: "flex-end",
+    backgroundColor: "#16a34a",
+    color: "#fff",
+    fontSize: 10,
+    fontWeight: "700",
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  productImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 14,
+    backgroundColor: "#d1fae5",
+  },
+  productName: {
+    color: "#111827",
+    fontSize: 14,
+    fontWeight: "700",
+    paddingHorizontal: 12,
+    marginTop: 10,
+  },
+  productMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 12,
+    marginTop: 5,
+  },
+  productMetaText: {
+    color: "#64748b",
+    fontSize: 11,
+  },
+  productBottomRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    marginTop: 10,
+  },
+  productPrice: {
+    color: "#16a34a",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+  productUnit: {
+    color: "#64748b",
+    fontSize: 11,
+    marginTop: 2,
+  },
+  addButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#16a34a",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 2,
+  },
+  sectionTitle: {
+    color: "#334155",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  updateCard: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 14,
+    alignItems: "flex-start",
+    gap: 12,
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.06,
+    shadowRadius: 14,
+    elevation: 2,
+  },
+  updateIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  updateBody: {
+    flex: 1,
+  },
+  updateText: {
+    color: "#1f2937",
+    fontSize: 13,
+    lineHeight: 19,
+    fontWeight: "500",
+  },
+  updateTime: {
+    color: "#64748b",
+    fontSize: 11,
+    marginTop: 6,
+  },
+  navBar: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 12,
+    backgroundColor: "#fff",
+    borderRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    shadowColor: "#0f172a",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.12,
+    shadowRadius: 22,
+    elevation: 10,
+  },
+  navItem: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 16,
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: "#e5e7eb",
-    backgroundColor: "#fff",
+    gap: 4,
   },
-  roleButtonSelected: {
-    backgroundColor: "#3b82f6",
-    borderColor: "#3b82f6",
-  },
-  roleLabel: {
-    marginTop: 8,
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#374151",
-  },
-  roleLabelSelected: {
-    color: "#fff",
-  },
-  input: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: "#e5e7eb",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    fontSize: 16,
-    marginBottom: 16,
-    backgroundColor: "#fff",
-  },
-  submitButton: {
-    backgroundColor: "#10b981",
-    height: 48,
-    borderRadius: 12,
-    justifyContent: "center",
+  navIconWrap: {
+    width: 36,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
-    marginTop: 8,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  signUpContainer: {
-    flexDirection: "row",
     justifyContent: "center",
-    marginTop: 20,
   },
-  signUpText: {
-    color: "#6b7280",
+  navIconWrapActive: {
+    backgroundColor: "#16a34a",
   },
-  signUpLink: {
-    color: "#059669",
+  navLabel: {
+    fontSize: 11,
+    color: "#94a3b8",
     fontWeight: "600",
+  },
+  navLabelActive: {
+    color: "#16a34a",
   },
 });
