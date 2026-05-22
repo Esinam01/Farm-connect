@@ -14,13 +14,27 @@ const initDatabase = async () => {
       throw new Error('Supabase credentials missing. Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env');
     }
 
-    supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+    supabase = createClient(supabaseUrl, supabaseServiceRoleKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+      db: {
+        schema: 'public',
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${supabaseServiceRoleKey}`,
+        },
+      },
+    });
 
+   
     // Test connection
-    const { error: pingError } = await supabase.from('orders').select('id').limit(1);
-    if (pingError && pingError.code !== 'PGRST116') {
-      throw pingError;
-    }
+const { error: pingError } = await supabase.from('categories').select('id').limit(1);
+if (pingError && pingError.code !== 'PGRST116') {
+  throw pingError;
+}
 
     databaseMode = 'supabase';
     console.log('✓ Supabase connected successfully');
