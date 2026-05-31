@@ -1,3 +1,7 @@
+///
+/// Type declarations
+///
+
 type UserDetails = {
   full_name: string;
   email: string;
@@ -11,13 +15,33 @@ type UserDetails = {
   is_verified: boolean | false;
 };
 
+type Product = {
+  id: string;
+  image: string | null;
+  featured: boolean;
+  organic: boolean;
+  rating: number;
+  stock: number;
+  name: string;
+  description: string | null;
+  farm: string | null;
+  price: number;
+  unit: string;
+  category: string | null;
+}
+
+const PLACEHOLDER_IMAGE = require("../assets/images/placeholder.png"); 
+
+///
+/// Supabase headers
+///
 const supabase_headers = {
   "Content-Type": "application/json",
   apikey: `${process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
   Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY}`,
 };
 
-export default async function CreateNewUser(userDetails: UserDetails) {
+export async function CreateNewUser(userDetails: UserDetails) {
   const response = await fetch(
     `${process.env.EXPO_PUBLIC_SUPABASE_URL}/user_profiles`,
     {
@@ -35,4 +59,60 @@ export default async function CreateNewUser(userDetails: UserDetails) {
 
   const text = await response.text();
   return text ? JSON.parse(text) : { success: true };
+}
+
+export async function FetchAllProducts(): Promise<Product[]> {
+  const query = new URLSearchParams({
+    select: [
+      "id",
+      "name",
+      "description",
+      "price",
+      "unit",
+      "stock",
+      "image_url",
+      "is_organic",
+      "is_featured",
+      "rating",
+      "sellers(farm_name,farm_location)",
+      "categories(name)",
+    ].join(","),
+    is_active: "eq.true",
+    order: "created_at.desc",
+  });
+
+  const response = await fetch(
+    `${process.env.EXPO_PUBLIC_SUPABASE_URL}/products?${query}`,
+    {
+      method: "GET",
+      headers: {
+        ...supabase_headers,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error("Failed to fetch products", {
+      cause: await response.text(),
+    });
+  }
+
+  const data = await response.json();
+
+  return data.map(
+    (row: any): Product => ({
+      id: row.id,
+      name: row.name,
+      description: row.description ?? null,
+      price: parseFloat(row.price),
+      unit: row.unit,
+      stock: row.stock,
+      image: row.image_url ? { uri: row.image_url } : PLACEHOLDER_IMAGE,
+      organic: row.is_organic,
+      featured: row.is_featured,
+      rating: parseFloat(row.rating),
+      farm: row.sellers?.farm_location ?? row.sellers?.farm_name ?? null,
+      category: row.categories?.name ?? null,
+    })
+  );
 }
