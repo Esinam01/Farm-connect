@@ -15,7 +15,7 @@ type UserDetails = {
   is_verified: boolean | false;
 };
 
-type Product = {
+export type Product = {
   id: string;
   image: string | null;
   featured: boolean;
@@ -28,6 +28,7 @@ type Product = {
   price: number;
   unit: string;
   category: string | null;
+  quantity: number | null;
 }
 
 const PLACEHOLDER_IMAGE = require("../assets/images/placeholder.png"); 
@@ -113,6 +114,7 @@ export async function FetchAllProducts(): Promise<Product[]> {
       rating: parseFloat(row.rating),
       farm: row.sellers?.farm_location ?? row.sellers?.farm_name ?? null,
       category: row.categories?.name ?? null,
+      quantity: null,
     })
   );
 }

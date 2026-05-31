@@ -16,98 +16,19 @@ import { router } from "expo-router";
 import { useBuyerSignedUp, fetchProducts } from "../../lib/market-store";
 import BottomNav from "../../components/BottomNav";
 import { useAuthStore } from "../../lib/auth-store";
+import { FetchAllProducts, Product } from "@/backend/actions";
+import ProductCard from "@/components/ProductCard";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
 const featurePills = ["100% Fresh", "Farm Direct", "Fast Delivery"];
 const categories = ["All", "Vegetables", "Fruits", "Dairy"];
 
-const featuredProducts = [
-  {
-    id: 1,
-    name: "Organic Tomatoes",
-    price: 4.99,
-    unit: "lb",
-    category: "Vegetables",
-    farm: "California",
-    rating: 4.8,
-    image:
-      "https://images.unsplash.com/photo-1546470427-227c7369a9b9?w=300&fit=crop",
-    organic: true,
-  },
-  {
-    id: 2,
-    name: "Fresh Apples",
-    price: 3.49,
-    unit: "lb",
-    category: "Fruits",
-    farm: "Washington",
-    rating: 4.9,
-    image:
-      "https://images.unsplash.com/photo-1560806887-1e4cd0b6cbd6?w=300&fit=crop",
-    organic: true,
-  },
-  {
-    id: 3,
-    name: "Farm Fresh Milk",
-    price: 5.99,
-    unit: "gallon",
-    category: "Dairy",
-    farm: "Wisconsin",
-    rating: 4.7,
-    image:
-      "https://images.unsplash.com/photo-1563636619-e9143da7973b?w=300&fit=crop",
-    organic: true,
-  },
-  {
-    id: 4,
-    name: "Free-Range Eggs",
-    price: 6.99,
-    unit: "dozen",
-    category: "Dairy",
-    farm: "Vermont",
-    rating: 5,
-    image:
-      "https://images.unsplash.com/photo-1582722872445-44dc5f7e3c8f?w=300&fit=crop",
-    organic: true,
-  },
-];
-
-const updates: {
-  id: number;
-  title: string;
-  time: string;
-  icon: IconName;
-  tint: string;
-  background: string;
-}[] = [
-  {
-    id: 1,
-    title: "Organic produce prices up 15% this week due to high demand",
-    time: "2h ago",
-    icon: "trending-up",
-    tint: "#16a34a",
-    background: "#ecfdf5",
-  },
-  {
-    id: 2,
-    title: "Perfect weather for spring planting starting next week",
-    time: "5h ago",
-    icon: "cloud-outline",
-    tint: "#2563eb",
-    background: "#eff6ff",
-  },
-  {
-    id: 3,
-    title: "New delivery routes now cover three more local farms",
-    time: "1d ago",
-    icon: "location-outline",
-    tint: "#f59e0b",
-    background: "#fff7ed",
-  },
-];
-
 export default function HomeScreen() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [wishlist, setWishlist] = useState<string[]>([]);
+  const [cart, setCart] = useState<Product[]>([]);
+
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const { initialized } = useAuthStore.useState();
@@ -115,38 +36,81 @@ export default function HomeScreen() {
 
   const handleSearchNavigate = () => {
     const query = searchQuery.trim();
-    router.push(query ? { pathname: "/explore", params: { query } } : "/explore");
+    router.push(
+      query ? { pathname: "/explore", params: { query } } : "/explore"
+    );
   };
 
   // Initial data fetch
 
+  const getProducts = async () => {
+    try {
+      const data = await FetchAllProducts();
+      setProducts(data);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+    }
+  };
+
   useEffect(() => {
-    fetchProducts();
+    getProducts();
   }, []);
+
+  const toggleWishlist = (productId: string) => {
+    setWishlist((prev) =>
+      prev.includes(productId)
+        ? prev.filter((id) => id !== productId)
+        : [...prev, productId]
+    );
+  };
+
+  const addToCart = (product: Product) => {
+    setCart((prev) => {
+      const exists = prev.find((item) => item.id === product.id);
+      if (exists) {
+        return prev.map((item) =>
+          item.id === product.id
+            ? { ...item, quantity: (item.quantity ?? 1) + 1 }
+            : item
+        );
+      }
+      return [...prev, { ...product, quantity: 1 }];
+    });
+  };
 
   const handleLeafTap = () => {
     // Hidden leaf tap functionality removed for real role-based auth
   };
 
-  const visibleProducts = featuredProducts.filter((product) => {
-    const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
-    const query = searchQuery.trim().toLowerCase();
-    const matchesSearch =
-      !query ||
-      product.name.toLowerCase().includes(query) ||
-      product.category.toLowerCase().includes(query) ||
-      product.farm.toLowerCase().includes(query);
-    return matchesCategory && matchesSearch;
-  });
+  const featuredCount = products.filter((p) => p.featured).length;
 
   if (!initialized) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" }}>
-        <View style={{ width: 80, height: 80, backgroundColor: "#0f9d58", borderRadius: 40, justifyContent: "center", alignItems: "center", marginBottom: 20 }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#fff",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
+        <View
+          style={{
+            width: 80,
+            height: 80,
+            backgroundColor: "#0f9d58",
+            borderRadius: 40,
+            justifyContent: "center",
+            alignItems: "center",
+            marginBottom: 20,
+          }}
+        >
           <Ionicons name="leaf" size={40} color="#fff" />
         </View>
         <ActivityIndicator size="large" color="#0f9d58" />
-        <Text style={{ marginTop: 12, color: "#64748b", fontSize: 14 }}>Loading FarmConnect...</Text>
+        <Text style={{ marginTop: 12, color: "#64748b", fontSize: 14 }}>
+          Loading FarmConnect...
+        </Text>
       </View>
     );
   }
@@ -154,16 +118,24 @@ export default function HomeScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.screen}>
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.hero}>
             <View style={styles.topRow}>
               <View style={styles.brandBlock}>
-                <TouchableOpacity style={styles.logoIcon} onPress={handleLeafTap}>
+                <TouchableOpacity
+                  style={styles.logoIcon}
+                  onPress={handleLeafTap}
+                >
                   <Ionicons name="leaf" size={22} color="#fff" />
                 </TouchableOpacity>
                 <View>
                   <Text style={styles.brandTitle}>FarmConnect</Text>
-                  <Text style={styles.brandSubtitle}>Fresh from Farm to You</Text>
+                  <Text style={styles.brandSubtitle}>
+                    Fresh from Farm to You
+                  </Text>
                 </View>
               </View>
               <TouchableOpacity style={styles.alertButton}>
@@ -171,7 +143,9 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.heroText}>Discover fresh produce from local farms nearby.</Text>
+            <Text style={styles.heroText}>
+              Discover fresh produce from local farms nearby.
+            </Text>
 
             <View style={styles.searchBox}>
               <Ionicons name="search" size={18} color="#94a3b8" />
@@ -184,7 +158,10 @@ export default function HomeScreen() {
                 returnKeyType="search"
                 onSubmitEditing={handleSearchNavigate}
               />
-              <TouchableOpacity onPress={handleSearchNavigate} style={styles.searchGoButton}>
+              <TouchableOpacity
+                onPress={handleSearchNavigate}
+                style={styles.searchGoButton}
+              >
                 <Ionicons name="arrow-forward" size={16} color="#fff" />
               </TouchableOpacity>
             </View>
@@ -202,16 +179,30 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.sectionSpacing}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryRow}
+            >
               {categories.map((category) => {
                 const active = selectedCategory === category;
                 return (
                   <TouchableOpacity
                     key={category}
                     onPress={() => setSelectedCategory(category)}
-                    style={[styles.categoryChip, active && styles.categoryChipActive]}
+                    style={[
+                      styles.categoryChip,
+                      active && styles.categoryChipActive,
+                    ]}
                   >
-                    <Text style={[styles.categoryText, active && styles.categoryTextActive]}>{category}</Text>
+                    <Text
+                      style={[
+                        styles.categoryText,
+                        active && styles.categoryTextActive,
+                      ]}
+                    >
+                      {category}
+                    </Text>
                   </TouchableOpacity>
                 );
               })}
@@ -222,10 +213,16 @@ export default function HomeScreen() {
             <View style={styles.weatherHeader}>
               <View>
                 <Text style={styles.weatherLabel}>Your Area</Text>
-                <Text style={styles.weatherTemp}>72° <Text style={styles.weatherUnit}>F</Text></Text>
+                <Text style={styles.weatherTemp}>
+                  72° <Text style={styles.weatherUnit}>F</Text>
+                </Text>
                 <Text style={styles.weatherState}>Partly Cloudy</Text>
               </View>
-              <Ionicons name="partly-sunny-outline" size={52} color="rgba(255,255,255,0.75)" />
+              <Ionicons
+                name="partly-sunny-outline"
+                size={52}
+                color="rgba(255,255,255,0.75)"
+              />
             </View>
             <View style={styles.weatherMeta}>
               <View style={styles.metaItem}>
@@ -239,7 +236,7 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          <View style={styles.updatesSection}>
+          {/* <View style={styles.updatesSection}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="newspaper-outline" size={18} color="#16a34a" />
               <Text style={styles.sectionTitle}>Latest Updates</Text>
@@ -247,7 +244,12 @@ export default function HomeScreen() {
 
             {updates.map((update) => (
               <View key={update.id} style={styles.updateCard}>
-                <View style={[styles.updateIcon, { backgroundColor: update.background }]}>
+                <View
+                  style={[
+                    styles.updateIcon,
+                    { backgroundColor: update.background },
+                  ]}
+                >
                   <Ionicons name={update.icon} size={16} color={update.tint} />
                 </View>
                 <View style={styles.updateBody}>
@@ -256,52 +258,34 @@ export default function HomeScreen() {
                 </View>
               </View>
             ))}
-          </View>
+          </View> */}
 
           <View style={styles.productsSection}>
             <View style={styles.sectionHeaderRow}>
               <View>
                 <Text style={styles.productsTitle}>Fresh Products</Text>
-                <Text style={styles.productsSubtitle}>{visibleProducts.length} items available</Text>
+                <Text style={styles.productsSubtitle}>
+                  {featuredCount} items available
+                </Text>
               </View>
-              <TouchableOpacity onPress={() => setSelectedCategory("All")}> 
+              <TouchableOpacity onPress={() => setSelectedCategory("All")}>
                 <Text style={styles.clearFilterText}>Reset</Text>
               </TouchableOpacity>
             </View>
 
-            <View style={styles.productGrid}>
-              {visibleProducts.map((product) => (
-                <View key={product.id} style={styles.productCard}>
-                  <View style={styles.productImageWrap}>
-                    <Text style={styles.productBadge}>Organic</Text>
-                    <Image source={{ uri: product.image }} style={styles.productImage} />
-                  </View>
-                  <Text style={styles.productName} numberOfLines={1}>{product.name}</Text>
-                  <View style={styles.productMetaRow}>
-                    <Ionicons name="star" size={12} color="#f59e0b" />
-                    <Text style={styles.productMetaText}>{product.rating}</Text>
-                    <Text style={styles.productMetaText}>• {product.farm}</Text>
-                  </View>
-                  <View style={styles.productBottomRow}>
-                    <View>
-                      <Text style={styles.productPrice}>${product.price.toFixed(2)}</Text>
-                      <Text style={styles.productUnit}>per {product.unit}</Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.addButton}
-                      onPress={() => {
-                        if (buyerSignedUp) {
-                          router.push("/buyer");
-                        } else {
-                          router.push("/signup?role=buyer&next=/buyer");
-                        }
-                      }}
-                    >
-                      <Ionicons name="add" size={18} color="#fff" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
+              {products
+                .filter((p) => p.featured)
+                .map((product) => (
+                  <ProductCard
+                    key={product.id}
+                    product={product}
+                    compact
+                    onAddToCart={addToCart}
+                    isWishlisted={wishlist.includes(product.id)}
+                    onToggleWishlist={toggleWishlist}
+                  />
+                ))}
             </View>
           </View>
         </ScrollView>
