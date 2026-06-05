@@ -44,7 +44,7 @@ const supabase_headers = {
 
 export async function CreateNewUser(userDetails: UserDetails) {
   const response = await fetch(
-    `${process.env.EXPO_PUBLIC_SUPABASE_URL}/user_profiles`,
+    `${process.env.EXPO_PUBLIC_SUPABASE_REST_API}/user_profiles`,
     {
       method: "POST",
       headers: {
@@ -83,7 +83,7 @@ export async function FetchAllProducts(): Promise<Product[]> {
   });
 
   const response = await fetch(
-    `${process.env.EXPO_PUBLIC_SUPABASE_URL}/products?${query}`,
+    `${process.env.EXPO_PUBLIC_SUPABASE_REST_API}/products?${query}`,
     {
       method: "GET",
       headers: {

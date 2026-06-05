@@ -155,22 +155,7 @@ export default function BuyerScreen() {
   const [cart, setCart] = useState([]);
   const [wishlist, setWishlist] = useState([]);
   const [cartVisible, setCartVisible] = useState(false);
-
-  if (!initialized) {
-    return (
-      <View
-        style={{
-          flex: 1,
-          backgroundColor: "#fff",
-          justifyContent: "center",
-          alignItems: "center",
-        }}
-      >
-        <ActivityIndicator size="large" color="#10b981" />
-      </View>
-    );
-  }
-  const [wishlistVisible, setWishlistVisible] = useState(false);
+  const [wishlistVisible, setWishlistVisible] = useState(false); // ← moved up
 
   const getProducts = async () => {
     try {
@@ -205,7 +190,7 @@ export default function BuyerScreen() {
   }, [products, selectedCategory, searchQuery]);
 
   // ── Cart helpers ───────────────────────────────────────────────────────────
-  const addToCart = (product) => {
+  const addToCart = async (product) => {
     setCart((prev) => {
       const existing = prev.find((i) => i.id === product.id);
       if (existing) {
@@ -262,6 +247,14 @@ export default function BuyerScreen() {
 
   // ── Wishlisted products ────────────────────────────────────────────────────
   const wishlistedProducts = products.filter((p) => wishlist.includes(p.id));
+
+  if (!initialized) {
+    return (
+      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#10b981" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

@@ -14,20 +14,25 @@ import { router, useLocalSearchParams } from "expo-router";
 import { useMarketProducts } from "../../lib/market-store";
 import BottomNav from "../../components/BottomNav";
 import { useAuthStore } from "../../lib/auth-store";
+import { FetchAllProducts, Product } from "@/backend/actions";
 
 const CATEGORIES = ["All", "Vegetables", "Fruits", "Dairy", "Grains"];
 
 type SearchCardProduct = ReturnType<typeof useMarketProducts>[number];
 
 type SearchCardProps = {
-  product: SearchCardProduct;
+  product: Product;
   onOpen: () => void;
 };
 
 function SearchCard({ product, onOpen }: SearchCardProps) {
   return (
     <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={onOpen}>
-      <Image source={{ uri: product.image }} style={styles.cardImage} />
+      <Image
+        source={product.image ?? require("../../assets/images/placeholder.png")}
+        style={styles.cardImage}
+        resizeMode="cover"
+      />
       <View style={styles.cardBody}>
         <View style={styles.cardTopRow}>
           <Text style={styles.cardName} numberOfLines={1}>
@@ -42,16 +47,18 @@ function SearchCard({ product, onOpen }: SearchCardProps) {
         </View>
 
         <Text style={styles.cardMeta} numberOfLines={1}>
-          {product.farm}
+          {product.farm ?? "Unknown farm"}
         </Text>
         <Text style={styles.cardDescription} numberOfLines={2}>
-          {product.description}
+          {product.description ?? ""}
         </Text>
 
         <View style={styles.cardFooter}>
           <View>
             <Text style={styles.cardPrice}>${product.price.toFixed(2)}</Text>
-            <Text style={styles.cardUnit}>per {product.unit.replace("/", "")}</Text>
+            <Text style={styles.cardUnit}>
+              per {(product.unit ?? "").replace("/", "")}
+            </Text>
           </View>
           <TouchableOpacity style={styles.openButton} onPress={onOpen}>
             <Text style={styles.openButtonText}>Open</Text>
@@ -64,35 +71,53 @@ function SearchCard({ product, onOpen }: SearchCardProps) {
 
 export default function ExploreScreen() {
   const params = useLocalSearchParams();
-  const initialQuery = Array.isArray(params.query) ? params.query[0] : params.query;
-  const products = useMarketProducts();
+  const initialQuery = Array.isArray(params.query)
+    ? params.query[0]
+    : params.query;
+  const [products, setProducts] = useState<Product[]>([]);
   const { initialized } = useAuthStore.useState();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
 
+  const getProducts = async () => {
+    try {
+      const data = await FetchAllProducts();
+      console.log(data);
+      setProducts(data);
+    } catch (error) {
+      console.error("Error fetching products:", error);
+    }
+  };
+
   useEffect(() => {
-    if (typeof initialQuery === "string") {
+    if (typeof initialQuery === "string" && initialQuery.trim()) {
       setSearchQuery(initialQuery);
     }
+    getProducts();
   }, [initialQuery]);
 
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return products.filter((product) => {
-      const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
+      const matchesCategory =
+        selectedCategory === "All" || product.category === selectedCategory;
       const matchesQuery =
         !query ||
         product.name.toLowerCase().includes(query) ||
-        product.description.toLowerCase().includes(query) ||
-        product.farm.toLowerCase().includes(query) ||
-        product.category.toLowerCase().includes(query);
+        (product.description ?? "").toLowerCase().includes(query) ||
+        (product.farm ?? "").toLowerCase().includes(query) ||
+        (product.category ?? "").toLowerCase().includes(query);
       return matchesCategory && matchesQuery;
     });
   }, [products, searchQuery, selectedCategory]);
 
   const handleNavigateToBuyer = (query?: string) => {
     const nextQuery = (query ?? searchQuery).trim();
-    router.push(nextQuery ? { pathname: "/buyer", params: { search: nextQuery } } : "/buyer");
+    router.push(
+      nextQuery
+        ? { pathname: "/buyer", params: { search: nextQuery } }
+        : "/buyer"
+    );
   };
 
   const handleClear = () => {
@@ -102,14 +127,22 @@ export default function ExploreScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.header}>
-          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+          >
             <Ionicons name="arrow-back" size={18} color="#0f172a" />
           </TouchableOpacity>
           <View>
             <Text style={styles.headerTitle}>Search Products</Text>
-            <Text style={styles.headerSubtitle}>{filteredProducts.length} results ready to browse</Text>
+            <Text style={styles.headerSubtitle}>
+              {filteredProducts.length} results ready to browse
+            </Text>
           </View>
         </View>
 
@@ -131,16 +164,30 @@ export default function ExploreScreen() {
           ) : null}
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryRow}
+        >
           {CATEGORIES.map((category) => {
             const active = selectedCategory === category;
             return (
               <TouchableOpacity
                 key={category}
-                style={[styles.categoryChip, active && styles.categoryChipActive]}
+                style={[
+                  styles.categoryChip,
+                  active && styles.categoryChipActive,
+                ]}
                 onPress={() => setSelectedCategory(category)}
               >
-                <Text style={[styles.categoryText, active && styles.categoryTextActive]}>{category}</Text>
+                <Text
+                  style={[
+                    styles.categoryText,
+                    active && styles.categoryTextActive,
+                  ]}
+                >
+                  {category}
+                </Text>
               </TouchableOpacity>
             );
           })}
@@ -151,12 +198,20 @@ export default function ExploreScreen() {
             <View>
               <Text style={styles.heroTitle}>Find something fresh</Text>
               <Text style={styles.heroText}>
-                Search products, then jump into the buyer flow with the exact term you used.
+                Search products, then jump into the buyer flow with the exact
+                term you used.
               </Text>
             </View>
-            <Ionicons name="basket-outline" size={42} color="rgba(255,255,255,0.78)" />
+            <Ionicons
+              name="basket-outline"
+              size={42}
+              color="rgba(255,255,255,0.78)"
+            />
           </View>
-          <TouchableOpacity style={styles.heroButton} onPress={() => handleNavigateToBuyer()}>
+          <TouchableOpacity
+            style={styles.heroButton}
+            onPress={() => handleNavigateToBuyer()}
+          >
             <Text style={styles.heroButtonText}>Open Buyer Search</Text>
           </TouchableOpacity>
         </View>
@@ -172,7 +227,9 @@ export default function ExploreScreen() {
           <View style={styles.emptyState}>
             <Ionicons name="search-outline" size={52} color="#cbd5e1" />
             <Text style={styles.emptyTitle}>No products found</Text>
-            <Text style={styles.emptyText}>Try a different keyword or category.</Text>
+            <Text style={styles.emptyText}>
+              Try a different keyword or category.
+            </Text>
             <TouchableOpacity style={styles.heroButton} onPress={handleClear}>
               <Text style={styles.heroButtonText}>Clear search</Text>
             </TouchableOpacity>
@@ -349,7 +406,7 @@ const styles = StyleSheet.create({
   },
   cardImage: {
     width: 110,
-    height: 110,
+    height: 150,
     backgroundColor: "#d1fae5",
   },
   cardBody: {
