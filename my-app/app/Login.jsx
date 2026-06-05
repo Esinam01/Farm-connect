@@ -30,7 +30,6 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      console.log("Attempting login for:", email);
       // We default to 'buyer' for generic login, roles are handled in store
       await loginUser(email, password, "buyer");
       console.log("Login successful, navigating to home...");

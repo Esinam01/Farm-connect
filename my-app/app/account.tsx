@@ -20,6 +20,7 @@ import {
   useCurrentRole,
   useUser,
   useAuthStore,
+  supabase,
 } from "../lib/auth-store";
 import BottomNav from "../components/BottomNav";
 
@@ -38,7 +39,9 @@ function buildInitials(name: string) {
 export default function AccountScreen() {
   const user = useUser();
   const currentRole = useCurrentRole();
-  const [activeTab, setActiveTab] = useState<"profile" | "password" | "help">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "password" | "help">(
+    "profile"
+  );
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -68,21 +71,35 @@ export default function AccountScreen() {
     setPhone(user.phone ?? "");
     setAddress(user.address ?? "");
     setAvatarUri(user.avatarUri ?? null);
-    setMemberSince(new Date().toLocaleDateString("en-US", { year: "numeric", month: "long" }));
+    setMemberSince(
+      new Date().toLocaleDateString("en-US", { year: "numeric", month: "long" })
+    );
   }, [isGuest, user]);
 
   if (!initialized) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f8fafc" }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: "#f8fafc",
+        }}
+      >
         <ActivityIndicator size="large" color="#0f9d58" />
-        <Text style={{ marginTop: 12, color: "#64748b", fontSize: 14 }}>Loading account...</Text>
+        <Text style={{ marginTop: 12, color: "#64748b", fontSize: 14 }}>
+          Loading account...
+        </Text>
       </View>
     );
   }
 
   if (isGuest) {
     return (
-      <ScrollView contentContainerStyle={styles.guestContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.guestContainer}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.guestHero}>
           <View style={styles.guestAvatarWrap}>
             <Ionicons name="person-circle-outline" size={80} color="#0f9d58" />
@@ -92,11 +109,17 @@ export default function AccountScreen() {
             Sign in to view your profile, track orders, and manage your account.
           </Text>
 
-          <TouchableOpacity style={styles.buyerButton} onPress={() => router.push("/Login")}>
+          <TouchableOpacity
+            style={styles.buyerButton}
+            onPress={() => router.push("/Login")}
+          >
             <Text style={styles.buyerButtonText}>Sign In as Buyer</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.sellerButton} onPress={() => router.push("/Login")}>
+          <TouchableOpacity
+            style={styles.sellerButton}
+            onPress={() => router.push("/Login")}
+          >
             <Text style={styles.sellerButtonText}>Sign In as Seller</Text>
           </TouchableOpacity>
 
@@ -113,9 +136,13 @@ export default function AccountScreen() {
 
   const pickImage = async () => {
     try {
-      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      const permission =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert("Permission needed", "Please allow photo library access to change your profile image.");
+        Alert.alert(
+          "Permission needed",
+          "Please allow photo library access to change your profile image."
+        );
         return;
       }
 
@@ -135,13 +162,14 @@ export default function AccountScreen() {
       setAvatarUri(selectedUri);
       await updateCurrentUserProfile({ avatarUri: selectedUri });
     } catch (error) {
-      Alert.alert("Image Error", error instanceof Error ? error.message : "Failed to pick image");
+      Alert.alert(
+        "Image Error",
+        error instanceof Error ? error.message : "Failed to pick image"
+      );
     } finally {
       setUploadingImage(false);
     }
   };
-
-
 
   const handlePasswordUpdate = async () => {
     if (!currentPassword || !newPassword || !confirmPassword) {
@@ -167,12 +195,15 @@ export default function AccountScreen() {
       setConfirmPassword("");
       Alert.alert("Updated", "Your password has been changed.");
     } catch (error) {
-      Alert.alert("Password Error", error instanceof Error ? error.message : "Could not update password.");
+      Alert.alert(
+        "Password Error",
+        error instanceof Error ? error.message : "Could not update password."
+      );
     } finally {
       setSavingPassword(false);
     }
   };
-  
+
   const handleProfileUpdate = async () => {
     if (isEditing) {
       try {
@@ -186,7 +217,10 @@ export default function AccountScreen() {
         setIsEditing(false);
         Alert.alert("Success", "Profile updated successfully!");
       } catch (error) {
-        Alert.alert("Update Error", error instanceof Error ? error.message : "Could not update profile");
+        Alert.alert(
+          "Update Error",
+          error instanceof Error ? error.message : "Could not update profile"
+        );
       } finally {
         setSavingProfile(false);
       }
@@ -195,23 +229,40 @@ export default function AccountScreen() {
     }
   };
 
+  const handleLogout = async () => {
+    console.log("Sign out button pressed");
+    try {
+      await logout();
 
+      const session = await supabase.auth.getSession();
 
-  const handleLogout = () => {
-    Alert.alert("Sign Out", "Are you sure you want to sign out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Sign Out",
-        style: "destructive",
-        onPress: async () => {
-          await logout();
-          router.replace("/Login");
-        },
-      },
-    ]);
+      console.log("After logout session:", session.data.session);
+
+      router.replace("/Login");
+    } catch (err) {
+      console.error(err);
+    }
+    // Alert.alert("Sign Out", "Are you sure you want to sign out?", [
+    //   { text: "Cancel", style: "cancel" },
+    //   {
+    //     text: "Sign Out",
+    //     style: "destructive",
+    //     onPress: async () => {
+    //       try {
+    //         await logout();
+
+    //         const session = await supabase.auth.getSession();
+
+    //         console.log("After logout session:", session.data.session);
+
+    //         router.replace("/Login");
+    //       } catch (err) {
+    //         console.error(err);
+    //       }
+    //     },
+    //   },
+    // ]);
   };
-
-
 
   return (
     <View style={styles.loggedInContainer}>
@@ -220,7 +271,9 @@ export default function AccountScreen() {
         <View style={styles.headerTop}>
           <Text style={styles.headerTitle}>My Account</Text>
           <View style={{ flexDirection: "row", gap: 16 }}>
-            <TouchableOpacity onPress={() => Alert.alert("Settings", "Settings coming soon")}>
+            <TouchableOpacity
+              onPress={() => Alert.alert("Settings", "Settings coming soon")}
+            >
               <Ionicons name="settings-outline" size={24} color="#fff" />
             </TouchableOpacity>
             <TouchableOpacity onPress={handleLogout}>
@@ -229,7 +282,10 @@ export default function AccountScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.browseButton} onPress={() => router.replace("/")}>
+        <TouchableOpacity
+          style={styles.browseButton}
+          onPress={() => router.replace("/")}
+        >
           <Ionicons name="home-outline" size={18} color="#fff" />
           <Text style={styles.browseButtonText}>Browse Marketplace</Text>
         </TouchableOpacity>
@@ -238,7 +294,10 @@ export default function AccountScreen() {
       {/* Tab Navigation */}
       <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === "profile" && styles.tabButtonActive]}
+          style={[
+            styles.tabButton,
+            activeTab === "profile" && styles.tabButtonActive,
+          ]}
           onPress={() => setActiveTab("profile")}
         >
           <Ionicons
@@ -246,13 +305,21 @@ export default function AccountScreen() {
             size={20}
             color={activeTab === "profile" ? "#0f9d58" : "#94a3b8"}
           />
-          <Text style={[styles.tabText, activeTab === "profile" && styles.tabTextActive]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "profile" && styles.tabTextActive,
+            ]}
+          >
             Profile
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === "password" && styles.tabButtonActive]}
+          style={[
+            styles.tabButton,
+            activeTab === "password" && styles.tabButtonActive,
+          ]}
           onPress={() => setActiveTab("password")}
         >
           <Ionicons
@@ -260,13 +327,21 @@ export default function AccountScreen() {
             size={20}
             color={activeTab === "password" ? "#0f9d58" : "#94a3b8"}
           />
-          <Text style={[styles.tabText, activeTab === "password" && styles.tabTextActive]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "password" && styles.tabTextActive,
+            ]}
+          >
             Password
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.tabButton, activeTab === "help" && styles.tabButtonActive]}
+          style={[
+            styles.tabButton,
+            activeTab === "help" && styles.tabButtonActive,
+          ]}
           onPress={() => setActiveTab("help")}
         >
           <Ionicons
@@ -274,24 +349,41 @@ export default function AccountScreen() {
             size={20}
             color={activeTab === "help" ? "#0f9d58" : "#94a3b8"}
           />
-          <Text style={[styles.tabText, activeTab === "help" && styles.tabTextActive]}>
+          <Text
+            style={[
+              styles.tabText,
+              activeTab === "help" && styles.tabTextActive,
+            ]}
+          >
             Help
           </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={styles.tabContent} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.tabContent}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Profile Tab */}
         {activeTab === "profile" && (
-          <>
+          <View>
             {/* Avatar Section */}
             <View style={styles.profileHero}>
-              <TouchableOpacity style={styles.profileAvatarWrap} onPress={pickImage} activeOpacity={0.85}>
+              <TouchableOpacity
+                style={styles.profileAvatarWrap}
+                onPress={pickImage}
+                activeOpacity={0.85}
+              >
                 {avatarUri ? (
-                  <Image source={{ uri: avatarUri }} style={styles.profileAvatarImage} />
+                  <Image
+                    source={{ uri: avatarUri }}
+                    style={styles.profileAvatarImage}
+                  />
                 ) : (
                   <View style={styles.profileAvatarFallback}>
-                    <Text style={styles.profileAvatarFallbackText}>{initials || "U"}</Text>
+                    <Text style={styles.profileAvatarFallbackText}>
+                      {initials || "U"}
+                    </Text>
                   </View>
                 )}
                 <View style={styles.profileAvatarEditBadge}>
@@ -306,7 +398,11 @@ export default function AccountScreen() {
               <Text style={styles.profileName}>{user.fullName}</Text>
               <View style={styles.profileRolePill}>
                 <Ionicons
-                  name={currentRole === "seller" ? "storefront-outline" : "cart-outline"}
+                  name={
+                    currentRole === "seller"
+                      ? "storefront-outline"
+                      : "cart-outline"
+                  }
                   size={13}
                   color="#fff"
                 />
@@ -345,11 +441,22 @@ export default function AccountScreen() {
             <View style={styles.card}>
               <View style={styles.cardHeader}>
                 <Text style={styles.cardTitle}>Profile Information</Text>
-                <TouchableOpacity onPress={handleProfileUpdate} disabled={savingProfile}>
+                <TouchableOpacity
+                  onPress={handleProfileUpdate}
+                  disabled={savingProfile}
+                >
                   {savingProfile ? (
                     <ActivityIndicator size="small" color="#0f9d58" />
                   ) : (
-                    <Ionicons name={isEditing ? "checkmark-circle-outline" : "pencil-outline"} size={22} color="#0f9d58" />
+                    <Ionicons
+                      name={
+                        isEditing
+                          ? "checkmark-circle-outline"
+                          : "pencil-outline"
+                      }
+                      size={22}
+                      color="#0f9d58"
+                    />
                   )}
                 </TouchableOpacity>
               </View>
@@ -359,9 +466,15 @@ export default function AccountScreen() {
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Full Name</Text>
                   {isEditing ? (
-                    <TextInput style={styles.editInput} value={fullName} onChangeText={setFullName} />
+                    <TextInput
+                      style={styles.editInput}
+                      value={fullName}
+                      onChangeText={setFullName}
+                    />
                   ) : (
-                    <Text style={styles.infoValue}>{fullName || "Not provided"}</Text>
+                    <Text style={styles.infoValue}>
+                      {fullName || "Not provided"}
+                    </Text>
                   )}
                 </View>
               </View>
@@ -370,7 +483,9 @@ export default function AccountScreen() {
                 <Ionicons name="mail-outline" size={18} color="#94a3b8" />
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Email Address</Text>
-                  <Text style={[styles.infoValue, { color: "#94a3b8" }]}>{email || "Not provided"}</Text>
+                  <Text style={[styles.infoValue, { color: "#94a3b8" }]}>
+                    {email || "Not provided"}
+                  </Text>
                 </View>
               </View>
 
@@ -379,9 +494,16 @@ export default function AccountScreen() {
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Phone Number</Text>
                   {isEditing ? (
-                    <TextInput style={styles.editInput} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+                    <TextInput
+                      style={styles.editInput}
+                      value={phone}
+                      onChangeText={setPhone}
+                      keyboardType="phone-pad"
+                    />
                   ) : (
-                    <Text style={styles.infoValue}>{phone || "Not provided"}</Text>
+                    <Text style={styles.infoValue}>
+                      {phone || "Not provided"}
+                    </Text>
                   )}
                 </View>
               </View>
@@ -391,9 +513,15 @@ export default function AccountScreen() {
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Location</Text>
                   {isEditing ? (
-                    <TextInput style={styles.editInput} value={address} onChangeText={setAddress} />
+                    <TextInput
+                      style={styles.editInput}
+                      value={address}
+                      onChangeText={setAddress}
+                    />
                   ) : (
-                    <Text style={styles.infoValue}>{address || "Not provided"}</Text>
+                    <Text style={styles.infoValue}>
+                      {address || "Not provided"}
+                    </Text>
                   )}
                 </View>
               </View>
@@ -403,9 +531,16 @@ export default function AccountScreen() {
                 <View style={styles.infoContent}>
                   <Text style={styles.infoLabel}>Bio</Text>
                   {isEditing ? (
-                    <TextInput style={styles.editInput} value={bio} onChangeText={setBio} multiline />
+                    <TextInput
+                      style={styles.editInput}
+                      value={bio}
+                      onChangeText={setBio}
+                      multiline
+                    />
                   ) : (
-                    <Text style={styles.infoValue}>{bio || "Not provided"}</Text>
+                    <Text style={styles.infoValue}>
+                      {bio || "Not provided"}
+                    </Text>
                   )}
                 </View>
               </View>
@@ -419,11 +554,14 @@ export default function AccountScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
               <Ionicons name="log-out-outline" size={18} color="#b91c1c" />
               <Text style={styles.logoutButtonText}>Sign Out</Text>
             </TouchableOpacity>
-          </>
+          </View>
         )}
 
         {/* Password Tab */}
@@ -435,7 +573,9 @@ export default function AccountScreen() {
               </View>
               <View>
                 <Text style={styles.passwordTitle}>Password & Security</Text>
-                <Text style={styles.passwordSubtitle}>Manage your password and security settings</Text>
+                <Text style={styles.passwordSubtitle}>
+                  Manage your password and security settings
+                </Text>
               </View>
             </View>
 
@@ -476,10 +616,15 @@ export default function AccountScreen() {
                 />
               </View>
 
-              <Text style={styles.passwordHint}>Password must be at least 6 characters</Text>
+              <Text style={styles.passwordHint}>
+                Password must be at least 6 characters
+              </Text>
 
               <TouchableOpacity
-                style={[styles.primaryButton, savingPassword && styles.buttonDisabled]}
+                style={[
+                  styles.primaryButton,
+                  savingPassword && styles.buttonDisabled,
+                ]}
                 onPress={handlePasswordUpdate}
                 disabled={savingPassword}
               >
@@ -493,10 +638,15 @@ export default function AccountScreen() {
 
             <View style={styles.securityOptions}>
               <Text style={styles.securityTitle}>Security Options</Text>
-              <Text style={styles.securityText}>Two-factor authentication coming soon</Text>
+              <Text style={styles.securityText}>
+                Two-factor authentication coming soon
+              </Text>
             </View>
 
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+            <TouchableOpacity
+              style={styles.logoutButton}
+              onPress={handleLogout}
+            >
               <Ionicons name="log-out-outline" size={18} color="#b91c1c" />
               <Text style={styles.logoutButtonText}>Sign Out</Text>
             </TouchableOpacity>
@@ -507,7 +657,9 @@ export default function AccountScreen() {
         {activeTab === "help" && (
           <View style={styles.card}>
             <Text style={styles.helpTitle}>Help & Support</Text>
-            <Text style={styles.helpSubtitle}>Get assistance and find answers</Text>
+            <Text style={styles.helpSubtitle}>
+              Get assistance and find answers
+            </Text>
 
             <TouchableOpacity style={styles.helpRow}>
               <View style={[styles.helpIcon, { backgroundColor: "#3b82f6" }]}>
@@ -515,9 +667,15 @@ export default function AccountScreen() {
               </View>
               <View style={styles.helpContent}>
                 <Text style={styles.helpRowTitle}>Live Chat Support</Text>
-                <Text style={styles.helpRowSubtitle}>Get instant help from our team</Text>
+                <Text style={styles.helpRowSubtitle}>
+                  Get instant help from our team
+                </Text>
               </View>
-              <Ionicons name="chevron-forward-outline" size={20} color="#94a3b8" />
+              <Ionicons
+                name="chevron-forward-outline"
+                size={20}
+                color="#94a3b8"
+              />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.helpRow}>
@@ -528,7 +686,11 @@ export default function AccountScreen() {
                 <Text style={styles.helpRowTitle}>Email Support</Text>
                 <Text style={styles.helpRowSubtitle}>{SUPPORT_EMAIL}</Text>
               </View>
-              <Ionicons name="chevron-forward-outline" size={20} color="#94a3b8" />
+              <Ionicons
+                name="chevron-forward-outline"
+                size={20}
+                color="#94a3b8"
+              />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.helpRow}>
@@ -539,7 +701,11 @@ export default function AccountScreen() {
                 <Text style={styles.helpRowTitle}>Phone Support</Text>
                 <Text style={styles.helpRowSubtitle}>{SUPPORT_PHONE}</Text>
               </View>
-              <Ionicons name="chevron-forward-outline" size={20} color="#94a3b8" />
+              <Ionicons
+                name="chevron-forward-outline"
+                size={20}
+                color="#94a3b8"
+              />
             </TouchableOpacity>
 
             <TouchableOpacity style={styles.helpRow}>
@@ -548,9 +714,15 @@ export default function AccountScreen() {
               </View>
               <View style={styles.helpContent}>
                 <Text style={styles.helpRowTitle}>User Guide</Text>
-                <Text style={styles.helpRowSubtitle}>Learn how to use FarmConnect</Text>
+                <Text style={styles.helpRowSubtitle}>
+                  Learn how to use FarmConnect
+                </Text>
               </View>
-              <Ionicons name="chevron-forward-outline" size={20} color="#94a3b8" />
+              <Ionicons
+                name="chevron-forward-outline"
+                size={20}
+                color="#94a3b8"
+              />
             </TouchableOpacity>
 
             <TouchableOpacity

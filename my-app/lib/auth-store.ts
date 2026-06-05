@@ -1,18 +1,35 @@
 import { useSyncExternalStore } from "react";
 import { createClient, AuthChangeEvent, Session } from "@supabase/supabase-js";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Platform } from "react-native";
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || "";
+const SUPABASE_URL =
+  process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+const SUPABASE_ANON_KEY =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  "";
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn("Supabase credentials not detected in process.env");
 }
 
-export const supabase = (SUPABASE_URL && SUPABASE_ANON_KEY) 
-  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
-  : null as any;
+export const supabase =
+  SUPABASE_URL && SUPABASE_ANON_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          storage: Platform.OS === "web" ? undefined : AsyncStorage,
+          autoRefreshToken: true,
+          persistSession: true,
+          detectSessionInUrl: false,
+        },
+      })
+    : (null as any);
 
-console.log("Auth Store Initialized. Supabase Client:", supabase ? "READY" : "MISSING CREDENTIALS");
+console.log(
+  "Auth Store Initialized. Supabase Client:",
+  supabase ? "READY" : "MISSING CREDENTIALS"
+);
 
 export type User = {
   id: string;
@@ -42,9 +59,40 @@ let state: AuthState = {
 };
 
 const listeners = new Set<() => void>();
+let authSubscription: any = null;
 
 function emit() {
   listeners.forEach((listener) => listener());
+}
+
+function handleAuthState(session: Session | null) {
+  if (session?.user) {
+    state = {
+      ...state,
+      isLoggedIn: true,
+      initialized: true,
+      user: {
+        id: session.user.id,
+        email: session.user.email || "",
+        fullName: session.user.user_metadata?.full_name || "User",
+        role: session.user.user_metadata?.role || "buyer",
+        createdAt: new Date(session.user.created_at).getTime(),
+        avatarUri: session.user.user_metadata?.avatar_url || null,
+        phone: session.user.user_metadata?.phone || "",
+        address: session.user.user_metadata?.address || "",
+      },
+      currentRole: session.user.user_metadata?.role || "buyer",
+    };
+  } else {
+    state = {
+      ...state,
+      user: null,
+      isLoggedIn: false,
+      currentRole: null,
+      initialized: true,
+    };
+  }
+  emit();
 }
 
 export function subscribe(listener: () => void) {
@@ -57,27 +105,52 @@ export function getAuthState() {
 }
 
 export function useUser() {
-  return useSyncExternalStore(subscribe, () => state.user, () => state.user);
+  return useSyncExternalStore(
+    subscribe,
+    () => state.user,
+    () => state.user
+  );
 }
 
 export function useIsLoggedIn() {
-  return useSyncExternalStore(subscribe, () => state.isLoggedIn, () => state.isLoggedIn);
+  return useSyncExternalStore(
+    subscribe,
+    () => state.isLoggedIn,
+    () => state.isLoggedIn
+  );
 }
 
 export function useCurrentRole() {
-  return useSyncExternalStore(subscribe, () => state.currentRole, () => state.currentRole);
+  return useSyncExternalStore(
+    subscribe,
+    () => state.currentRole,
+    () => state.currentRole
+  );
 }
 
 export function useAuthLoading() {
-  return useSyncExternalStore(subscribe, () => state.loading, () => state.loading);
+  return useSyncExternalStore(
+    subscribe,
+    () => state.loading,
+    () => state.loading
+  );
 }
 
 export function useAuthInitialized() {
-  return useSyncExternalStore(subscribe, () => state.initialized, () => state.initialized);
+  return useSyncExternalStore(
+    subscribe,
+    () => state.initialized,
+    () => state.initialized
+  );
 }
 
 export const useAuthStore = {
-  useState: () => useSyncExternalStore(subscribe, () => state, () => state),
+  useState: () =>
+    useSyncExternalStore(
+      subscribe,
+      () => state,
+      () => state
+    ),
 };
 
 /**
@@ -90,9 +163,11 @@ export async function registerUser(
   role: "buyer" | "seller"
 ): Promise<User> {
   console.log("Attempting to register user:", email, role);
-  
+
   if (!supabase) {
-    throw new Error("Supabase is not configured. Please add your real URL and API Key to your .env file.");
+    throw new Error(
+      "Supabase is not configured. Please add your real URL and API Key to your .env file."
+    );
   }
 
   state = { ...state, loading: true };
@@ -117,29 +192,41 @@ export async function registerUser(
     }
     if (!data.user) throw new Error("Registration failed");
 
-    console.log("Signup successful, ensuring profile exists for ID:", data.user.id);
+    console.log(
+      "Signup successful, ensuring profile exists for ID:",
+      data.user.id
+    );
 
     // 2. Ensure the profile exists in the public.user_profiles table
-    // We try calling an RPC first if you've enabled it in Supabase, 
+    // We try calling an RPC first if you've enabled it in Supabase,
     // otherwise fallback to a direct insert with 'onConflict' logic handled by the trigger
-    const { error: profileError } = await supabase.rpc('create_profile_for_user', {
-      user_id: data.user.id,
-      user_email: email,
-      user_full_name: fullName,
-      user_role: role
-    });
+    const { error: profileError } = await supabase.rpc(
+      "create_profile_for_user",
+      {
+        user_id: data.user.id,
+        user_email: email,
+        user_full_name: fullName,
+        user_role: role,
+      }
+    );
 
     if (profileError) {
-      console.warn("RPC profile creation failed (might be because trigger handled it):", profileError.message);
-      
+      console.warn(
+        "RPC profile creation failed (might be because trigger handled it):",
+        profileError.message
+      );
+
       // Fallback: Direct insert if RPC is not available
       const { error: insertError } = await supabase
         .from("user_profiles")
         .insert([{ id: data.user.id, email, full_name: fullName, role }])
         .select();
-      
+
       if (insertError && !insertError.message.includes("already exists")) {
-        console.error("Manual profile insertion also failed:", insertError.message);
+        console.error(
+          "Manual profile insertion also failed:",
+          insertError.message
+        );
       }
     }
 
@@ -155,14 +242,8 @@ export async function registerUser(
     };
 
     console.log("Final Registered User Object:", user);
-    state = {
-      ...state,
-      user,
-      isLoggedIn: true,
-      currentRole: role,
-      loading: false,
-    };
-    
+    state = { ...state, loading: false };
+
     emit();
 
     return user;
@@ -197,7 +278,7 @@ export async function loginUser(
     }
     if (!data.user) throw new Error("Login failed");
 
-    console.log("Login successful, fetching profile for ID:", data.user.id);
+    console.log("Login successful");
 
     // Fetch the profile from our public table
     const { data: profile, error: profileError } = await supabase
@@ -213,23 +294,17 @@ export async function loginUser(
     const user: User = {
       id: data.user.id,
       email: data.user.email || email,
-      fullName: profile?.full_name || data.user.user_metadata?.full_name || "User",
+      fullName:
+        profile?.full_name || data.user.user_metadata?.full_name || "User",
       role: profile?.role || expectedRole,
       createdAt: new Date(data.user.created_at).getTime(),
-      avatarUri: profile?.avatar_url || data.user.user_metadata?.avatar_url || null,
+      avatarUri:
+        profile?.avatar_url || data.user.user_metadata?.avatar_url || null,
       phone: profile?.phone || data.user.user_metadata?.phone || "",
       address: profile?.address || data.user.user_metadata?.address || "",
     };
 
-    console.log("Final User Object:", user);
-
-    state = {
-      ...state,
-      user,
-      isLoggedIn: true,
-      currentRole: user.role as any,
-      loading: false,
-    };
+    state = { ...state, loading: false };
     emit();
 
     return user;
@@ -355,32 +430,23 @@ export async function updateCurrentUserPassword(newPassword: string) {
  * Logout user
  */
 export async function logout() {
-  console.log("Logging out...");
-  state = { ...state, loading: true };
-  emit();
-
   try {
-    // We attempt to sign out from Supabase
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      console.warn("Supabase signOut returned an error (might be already signed out):", error.message);
-    }
-  } catch (error: any) {
-    console.error("Error during Supabase signOut:", error.message || error);
-  } finally {
-    // Always clear local state regardless of whether Supabase succeeded
-    console.log("Clearing local auth state...");
     state = {
       ...state,
       user: null,
       isLoggedIn: false,
       currentRole: null,
-      loading: false,
+      initialized: true,
     };
+
     emit();
+
+    await supabase.auth.signOut({ scope: "local" });
+  } catch (error) {
+    console.error(error);
+    throw error;
   }
 }
-
 // No longer using mock admin login
 
 /**
@@ -392,7 +458,7 @@ export async function mockLogin(role: "buyer" | "seller") {
   emit();
 
   // Artificial delay
-  await new Promise(resolve => setTimeout(resolve, 800));
+  await new Promise((resolve) => setTimeout(resolve, 800));
 
   const user: User = {
     id: "mock-user-id",
@@ -423,10 +489,22 @@ export async function mockLogin(role: "buyer" | "seller") {
 export function initAuth() {
   if (!supabase) {
     console.error("Auth Store: Supabase client is null. Check your .env file.");
-    state = { ...state, initialized: true, loading: false };
+    // state = { ...state, initialized: true, loading: false };
     emit();
     return;
   }
+
+  if (authSubscription) return;
+
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange(
+    (event: AuthChangeEvent, session: Session | null) => {
+      handleAuthState(session);
+    }
+  );
+
+  authSubscription = subscription;
 
   // Safety timeout: if auth takes more than 5 seconds, mark as initialized anyway
   const timeout = setTimeout(() => {
@@ -437,95 +515,19 @@ export function initAuth() {
     }
   }, 5000);
 
-  const handleAuthState = async (session: Session | null) => {
-    if (session?.user) {
-      try {
-        // Re-fetch profile on session restore
-        const { data: profile, error: profileError } = await supabase
-          .from("user_profiles")
-          .select("*")
-          .eq("id", session.user.id)
-          .single();
-
-        let userData: User;
-
-        if (profileError || !profile) {
-          console.warn("Profile missing for authenticated user. Attempting auto-creation...");
-          
-          const fullName = session.user.user_metadata?.full_name || session.user.email?.split("@")[0] || "User";
-          const role = session.user.user_metadata?.role || "buyer";
-
-          // Try to create the missing profile
-          await supabase
-            .from("user_profiles")
-            .insert([{
-              id: session.user.id,
-              email: session.user.email,
-              full_name: fullName,
-              role: role
-            }]);
-
-          userData = {
-            id: session.user.id,
-            email: session.user.email || "",
-            fullName,
-            role,
-            avatarUri: null,
-            createdAt: new Date(session.user.created_at).getTime(),
-            phone: "",
-            address: "",
-          };
-        } else {
-          userData = {
-            id: session.user.id,
-            email: session.user.email || "",
-            fullName: profile.full_name || session.user.user_metadata?.full_name || "User",
-            role: profile.role || "buyer",
-            createdAt: new Date(session.user.created_at).getTime(),
-            avatarUri: profile.avatar_url || null,
-            phone: profile.phone || "",
-            address: profile.address || "",
-          };
-        }
-
-        state = {
-          ...state,
-          user: userData,
-          isLoggedIn: true,
-          currentRole: userData.role as any,
-          initialized: true,
-          loading: false,
-        };
-      } catch (err) {
-        console.error("Error in handleAuthState:", err);
-        // Even if profile fetch fails, we should mark as initialized
-        state = { ...state, initialized: true, loading: false };
-      }
-    } else {
-      // Session is null (Signed out)
-      state = {
-        ...state,
-        user: null,
-        isLoggedIn: false,
-        currentRole: null,
-        initialized: true,
-        loading: false,
-      };
-    }
-    
-    clearTimeout(timeout);
-    emit();
-  };
-
   // 1. Initial session check
-  supabase.auth.getSession().then(({ data: { session } }: { data: { session: Session | null } }) => {
-    handleAuthState(session);
-  });
+  supabase.auth
+    .getSession()
+    .then(({ data: { session } }: { data: { session: Session | null } }) => {
+      handleAuthState(session);
+    });
 
   // 2. Listen for future changes
-  supabase.auth.onAuthStateChange(async (_event: AuthChangeEvent, session: Session | null) => {
-    handleAuthState(session);
-  });
+  supabase.auth.onAuthStateChange(
+    (event: AuthChangeEvent, session: Session | null) => {
+      handleAuthState(session);
+    }
+  );
 }
 
 // Auto-init on load
