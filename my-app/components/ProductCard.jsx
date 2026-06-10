@@ -1,5 +1,8 @@
 import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useBuyerSignedUp } from "@/lib/market-store";
+import { router } from "expo-router";
+import { getAuthState } from "@/lib/auth-store";
 
 export default function ProductCard({
   product,
@@ -8,6 +11,9 @@ export default function ProductCard({
   isWishlisted,
   onToggleWishlist,
 }) {
+
+  // const buyerSignedUp = useBuyerSignedUp();
+  const isSignedUp = getAuthState();
   return (
     <View style={[styles.productCard, compact && styles.productCardCompact]}>
       <View style={styles.productImageContainer}>
@@ -62,7 +68,13 @@ export default function ProductCard({
           </Text>
           <TouchableOpacity
             style={styles.addButton}
-            onPress={() => onAddToCart(product)}
+            onPress={() => {
+              if (isSignedUp.isLoggedIn && isSignedUp.currentRole == "buyer") {
+                router.push("/buyer");
+              } else {
+                router.push("/signup?role=buyer&next=/buyer");
+              }
+            }}
           >
             <Ionicons name="cart-outline" size={14} color="#fff" />
             <Text style={styles.addButtonText}>Add</Text>

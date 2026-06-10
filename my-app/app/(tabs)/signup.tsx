@@ -254,7 +254,7 @@ export default function SignUpScreen() {
               </View>
             </View>
 
-            {/* <View style={styles.inputContainer}>
+            <View style={styles.inputContainer}>
               <Text style={styles.label}>Password</Text>
               <View
                 style={[
@@ -324,7 +324,7 @@ export default function SignUpScreen() {
               {errors.confirmPassword ? (
                 <Text style={styles.errorText}>{errors.confirmPassword}</Text>
               ) : null}
-            </View> */}
+            </View>
 
             <TouchableOpacity
               style={[styles.signUpButton, loading && styles.disabledButton]}

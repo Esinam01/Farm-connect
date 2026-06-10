@@ -54,12 +54,50 @@ export default function AccountScreen() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [errors, setErrors] = useState<{
+    currentPassword?: string;
+    newPassword?: string;
+    confirmPassword?: string;
+  }>({});
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
 
   const { initialized } = useAuthStore.useState();
   const isGuest = !user;
+
+  const validateField = (field: string, value: string) => {
+    const newErrors = { ...errors };
+
+    if (field === "currentPassword") {
+      if (!value) newErrors.currentPassword = "Current password is required";
+      else delete newErrors.currentPassword;
+    }
+
+    if (field === "newPassword") {
+      if (!value) newErrors.newPassword = "New password is required";
+      else if (value.length < 6)
+        newErrors.newPassword = "Must be at least 6 characters";
+      else delete newErrors.newPassword;
+    }
+
+    if (field === "newPassword") {
+      if (!value) newErrors.newPassword = "New password is required";
+      else if (value.length < 6) newErrors.newPassword = "Must be at least 6 characters";
+      else if (value === currentPassword) newErrors.newPassword = "New password must differ from current password";
+      else delete newErrors.newPassword;
+    }
+
+    if (field === "confirmPassword") {
+      if (!value) newErrors.confirmPassword = "Please confirm your password";
+      else if (value !== newPassword)
+        newErrors.confirmPassword = "Passwords do not match";
+      else delete newErrors.confirmPassword;
+    }
+
+    setErrors(newErrors);
+  };
 
   useEffect(() => {
     if (isGuest) {
@@ -189,10 +227,11 @@ export default function AccountScreen() {
 
     try {
       setSavingPassword(true);
-      await updateCurrentUserPassword(newPassword);
+      await updateCurrentUserPassword(currentPassword, newPassword);
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setErrors({});
       Alert.alert("Updated", "Your password has been changed.");
     } catch (error) {
       Alert.alert(
@@ -582,38 +621,128 @@ export default function AccountScreen() {
             <View style={styles.passwordFields}>
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Current Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={currentPassword}
-                  onChangeText={setCurrentPassword}
-                  placeholder="Enter current password"
-                  placeholderTextColor="#94a3b8"
-                  secureTextEntry
-                />
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    errors.currentPassword && styles.inputError,
+                  ]}
+                >
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        flex: 1,
+                        borderWidth: 0,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                    value={currentPassword}
+                    onChangeText={(val) => {
+                      setCurrentPassword(val);
+                      validateField("currentPassword", val);
+                    }}
+                    placeholder="Enter current password"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeIcon}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color="#94a3b8"
+                    />
+                  </TouchableOpacity>
+                </View>
+                {errors.currentPassword ? (
+                  <Text style={styles.errorText}>{errors.currentPassword}</Text>
+                ) : null}
               </View>
 
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>New Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  placeholder="Enter new password"
-                  placeholderTextColor="#94a3b8"
-                  secureTextEntry
-                />
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    errors.newPassword && styles.inputError,
+                  ]}
+                >
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        flex: 1,
+                        borderWidth: 0,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                    value={newPassword}
+                    onChangeText={(val) => {
+                      setNewPassword(val);
+                      validateField("newPassword", val);
+                    }}
+                    placeholder="Enter new password"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeIcon}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color="#94a3b8"
+                    />
+                  </TouchableOpacity>
+                </View>
+                {errors.newPassword ? (
+                  <Text style={styles.errorText}>{errors.newPassword}</Text>
+                ) : null}
               </View>
 
               <View style={styles.fieldGroup}>
                 <Text style={styles.label}>Confirm New Password</Text>
-                <TextInput
-                  style={styles.input}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm new password"
-                  placeholderTextColor="#94a3b8"
-                  secureTextEntry
-                />
+                <View
+                  style={[
+                    styles.inputWrapper,
+                    errors.confirmPassword && styles.inputError,
+                  ]}
+                >
+                  <TextInput
+                    style={[
+                      styles.input,
+                      {
+                        flex: 1,
+                        borderWidth: 0,
+                        backgroundColor: "transparent",
+                      },
+                    ]}
+                    value={confirmPassword}
+                    onChangeText={(val) => {
+                      setConfirmPassword(val);
+                      validateField("confirmPassword", val);
+                    }}
+                    placeholder="Confirm new password"
+                    placeholderTextColor="#94a3b8"
+                    secureTextEntry={!showPassword}
+                  />
+                  <TouchableOpacity
+                    onPress={() => setShowPassword(!showPassword)}
+                    style={styles.eyeIcon}
+                  >
+                    <Ionicons
+                      name={showPassword ? "eye-off-outline" : "eye-outline"}
+                      size={20}
+                      color="#94a3b8"
+                    />
+                  </TouchableOpacity>
+                </View>
+                {errors.confirmPassword ? (
+                  <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+                ) : null}
               </View>
 
               <Text style={styles.passwordHint}>
@@ -1054,6 +1183,15 @@ const styles = StyleSheet.create({
   fieldGroup: {
     marginBottom: 14,
   },
+  inputWrapper: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e2e8f0",
+    borderRadius: 12,
+    backgroundColor: "#f8fafc",
+    paddingHorizontal: 12,
+  },
   label: {
     fontSize: 12,
     fontWeight: "700",
@@ -1078,10 +1216,22 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     marginTop: 2,
   },
+  eyeIcon: {
+    padding: 8,
+  },
   signupText: {
     fontSize: 12,
     color: "#94a3b8",
     marginBottom: 12,
+  },
+  inputError: {
+    borderColor: "#ef4444",
+    backgroundColor: "#fef2f2",
+  },
+  errorText: {
+    fontSize: 12,
+    color: "#ef4444",
+    marginTop: 4,
   },
   passwordHint: {
     fontSize: 12,

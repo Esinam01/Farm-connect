@@ -25,6 +25,40 @@ const featurePills = ["100% Fresh", "Farm Direct", "Fast Delivery"];
 const categories = ["All", "Vegetables", "Fruits", "Dairy"];
 
 export default function HomeScreen() {
+  const updates: {
+    id: number;
+    title: string;
+    time: string;
+    icon: IconName;
+    tint: string;
+    background: string;
+  }[] = [
+    {
+      id: 1,
+      title: "Organic produce prices up 15% this week due to high demand",
+      time: "2h ago",
+      icon: "trending-up",
+      tint: "#16a34a",
+      background: "#ecfdf5",
+    },
+    {
+      id: 2,
+      title: "Perfect weather for spring planting starting next week",
+      time: "5h ago",
+      icon: "cloud-outline",
+      tint: "#2563eb",
+      background: "#eff6ff",
+    },
+    {
+      id: 3,
+      title: "New delivery routes now cover three more local farms",
+      time: "1d ago",
+      icon: "location-outline",
+      tint: "#f59e0b",
+      background: "#fff7ed",
+    },
+  ];
+
   const [products, setProducts] = useState<Product[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [cart, setCart] = useState<Product[]>([]);
@@ -236,7 +270,7 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* <View style={styles.updatesSection}>
+          <View style={styles.updatesSection}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="newspaper-outline" size={18} color="#16a34a" />
               <Text style={styles.sectionTitle}>Latest Updates</Text>
@@ -258,7 +292,7 @@ export default function HomeScreen() {
                 </View>
               </View>
             ))}
-          </View> */}
+          </View>
 
           <View style={styles.productsSection}>
             <View style={styles.sectionHeaderRow}>

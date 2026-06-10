@@ -13,7 +13,7 @@ import {
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { router, Link } from "expo-router";
+import { router, Link, Stack } from "expo-router";
 import { loginUser, mockLogin } from "../lib/auth-store";
 
 export default function LoginScreen() {
@@ -56,13 +56,14 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <Stack.Screen options={{ headerShown: false }} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <TouchableOpacity onPress={() => router.push("/")} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#0f9d58" />
             </TouchableOpacity>
             <View style={styles.logoContainer}>

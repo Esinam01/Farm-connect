@@ -402,28 +402,18 @@ export async function updateCurrentUserProfile(updates: {
 /**
  * Update user password
  */
-export async function updateCurrentUserPassword(newPassword: string) {
-  if (!state.user) {
-    throw new Error("No user is currently signed in");
-  }
+export async function updateCurrentUserPassword(currentPassword: string, newPassword: string) {
+  // Re-authenticate with current password first
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: state.user!.email,
+    password: currentPassword,
+  });
 
-  state = { ...state, loading: true };
-  emit();
+  if (signInError) throw new Error("Current password is incorrect.");
 
-  try {
-    const { error } = await supabase.auth.updateUser({
-      password: newPassword,
-    });
-
-    if (error) throw error;
-
-    state = { ...state, loading: false };
-    emit();
-  } catch (error) {
-    state = { ...state, loading: false };
-    emit();
-    throw error;
-  }
+  // Now safe to update
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw error;
 }
 
 /**
