@@ -311,14 +311,7 @@ export default function HomeScreen() {
               {products
                 .filter((p) => p.featured)
                 .map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    compact
-                    onAddToCart={addToCart}
-                    isWishlisted={wishlist.includes(product.id)}
-                    onToggleWishlist={toggleWishlist}
-                  />
+                  <ProductCard product={product} compact />
                 ))}
             </View>
           </View>

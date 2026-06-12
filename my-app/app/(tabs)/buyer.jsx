@@ -13,11 +13,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
-import { useMarketProducts } from "../../lib/market-store";
 import BottomNav from "../../components/BottomNav";
-import { useAuthStore } from "../../lib/auth-store";
+import { useAuthInitialized } from "../../lib/auth-store";
 import { FetchAllProducts } from "../../backend/actions";
 import ProductCard from "../../components/ProductCard";
+import { useCartStore } from "../../lib/cart-store";
+import { useWishlistStore } from "../../lib/wishlist-store";
 
 const CATEGORIES = ["All", "Vegetables", "Fruits", "Dairy", "Grains"];
 
@@ -37,7 +38,6 @@ function CartModal({
     <Modal visible={visible} animationType="slide" transparent>
       <View style={styles.modalOverlay}>
         <View style={styles.modalSheet}>
-          {/* Modal Header */}
           <View style={styles.modalHeader}>
             <View style={styles.modalHandle} />
             <View style={styles.modalTitleRow}>
@@ -62,10 +62,7 @@ function CartModal({
               >
                 {cart.map((item) => (
                   <View key={item.id} style={styles.cartItem}>
-                    <Image
-                      source={{ uri: item.image }}
-                      style={styles.cartItemImage}
-                    />
+                    <Image source={item.image} style={styles.cartItemImage} />
                     <View style={styles.cartItemInfo}>
                       <Text style={styles.cartItemName} numberOfLines={1}>
                         {item.name}
@@ -107,7 +104,6 @@ function CartModal({
                 ))}
               </ScrollView>
 
-              {/* Summary */}
               <View style={styles.cartSummary}>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>
@@ -144,18 +140,28 @@ function CartModal({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function BuyerScreen() {
-  const { initialized } = useAuthStore.useState();
+  // ✅ Fixed: useAuthStore called as a hook, not .useState()
+  const initialized = useAuthInitialized();
+
   const [products, setProducts] = useState([]);
   const params = useLocalSearchParams();
   const initialSearch = Array.isArray(params.search)
     ? params.search[0]
     : params.search;
+
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
-  const [cart, setCart] = useState([]);
-  const [wishlist, setWishlist] = useState([]);
   const [cartVisible, setCartVisible] = useState(false);
-  const [wishlistVisible, setWishlistVisible] = useState(false); // ← moved up
+  const [wishlistVisible, setWishlistVisible] = useState(false);
+
+  const {
+    wishlist,
+    toggleWishlist,
+    hydrate: hydrateWishlist,
+  } = useWishlistStore();
+
+  const { cart, addToCart, updateQty, removeFromCart } = useCartStore();
+  const hydrateCart = useCartStore((s) => s.hydrate);
 
   const getProducts = async () => {
     try {
@@ -167,10 +173,24 @@ export default function BuyerScreen() {
   };
 
   useEffect(() => {
+    hydrateCart();
+    hydrateWishlist();
+
     if (typeof initialSearch === "string" && initialSearch.trim()) {
       setSearchQuery(initialSearch);
     }
+
     getProducts();
+
+    if (params.addProduct) {
+      try {
+        const product = JSON.parse(decodeURIComponent(params.addProduct));
+        addToCart(product);
+        router.setParams({ addProduct: undefined });
+      } catch (e) {
+        console.error("Failed to parse addProduct param:", e);
+      }
+    }
   }, [initialSearch]);
 
   // ── Filtered products ──────────────────────────────────────────────────────
@@ -190,42 +210,13 @@ export default function BuyerScreen() {
   }, [products, selectedCategory, searchQuery]);
 
   // ── Cart helpers ───────────────────────────────────────────────────────────
-  const addToCart = async (product) => {
-    setCart((prev) => {
-      const existing = prev.find((i) => i.id === product.id);
-      if (existing) {
-        return prev.map((i) =>
-          i.id === product.id ? { ...i, qty: i.qty + 1 } : i
-        );
-      }
-      return [...prev, { ...product, qty: 1 }];
-    });
-    // brief feedback
-    Alert.alert("Added to cart", `${product.name} added to your cart.`, [
-      { text: "OK" },
-    ]);
-  };
-
-  const updateQty = (id, qty) => {
-    if (qty <= 0) {
-      setCart((prev) => prev.filter((i) => i.id !== id));
-    } else {
-      setCart((prev) => prev.map((i) => (i.id === id ? { ...i, qty } : i)));
-    }
-  };
-
-  const removeFromCart = (id) => {
-    setCart((prev) => prev.filter((i) => i.id !== id));
-  };
-
   const cartCount = cart.reduce((s, i) => s + i.qty, 0);
 
-  // ── Wishlist helpers ───────────────────────────────────────────────────────
-  const toggleWishlist = (id) => {
-    setWishlist((prev) =>
-      prev.includes(id) ? prev.filter((w) => w !== id) : [...prev, id]
-    );
-  };
+  // ── Wishlisted products ────────────────────────────────────────────────────
+  // ✅ Fixed: wishlist holds objects, so filter by ID using .some()
+  const wishlistedProducts = products.filter((p) =>
+    wishlist.some((item) => item.id === p.id)
+  );
 
   // ── Checkout ───────────────────────────────────────────────────────────────
   const handleCheckout = () => {
@@ -234,7 +225,6 @@ export default function BuyerScreen() {
       return;
     }
     setCartVisible(false);
-    // Navigate to checkout screen with cart data
     router.push({
       pathname: "/checkout",
       params: { cart: encodeURIComponent(JSON.stringify(cart)) },
@@ -245,12 +235,16 @@ export default function BuyerScreen() {
     router.push("/account");
   };
 
-  // ── Wishlisted products ────────────────────────────────────────────────────
-  const wishlistedProducts = products.filter((p) => wishlist.includes(p.id));
-
   if (!initialized) {
     return (
-      <View style={{ flex: 1, backgroundColor: "#fff", justifyContent: "center", alignItems: "center" }}>
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: "#fff",
+          justifyContent: "center",
+          alignItems: "center",
+        }}
+      >
         <ActivityIndicator size="large" color="#10b981" />
       </View>
     );
@@ -370,13 +364,7 @@ export default function BuyerScreen() {
               {products
                 .filter((p) => p.featured)
                 .map((product) => (
-                  <ProductCard
-                    key={product.id}
-                    product={product}
-                    onAddToCart={addToCart}
-                    isWishlisted={wishlist.includes(product.id)}
-                    onToggleWishlist={toggleWishlist}
-                  />
+                  <ProductCard key={product.id} product={product} compact />
                 ))}
             </ScrollView>
           </View>
@@ -444,15 +432,9 @@ export default function BuyerScreen() {
             </View>
           ) : (
             <View style={styles.productsGrid}>
+              {/* ✅ Fixed: added missing key prop */}
               {filteredProducts.map((product) => (
-                <ProductCard
-                  key={`grid-${product.id}`}
-                  product={product}
-                  compact
-                  onAddToCart={addToCart}
-                  isWishlisted={wishlist.includes(product.id)}
-                  onToggleWishlist={toggleWishlist}
-                />
+                <ProductCard key={product.id} product={product} compact />
               ))}
             </View>
           )}
@@ -501,7 +483,7 @@ export default function BuyerScreen() {
                 {wishlistedProducts.map((product) => (
                   <View key={product.id} style={styles.cartItem}>
                     <Image
-                      source={{ uri: product.image }}
+                      source={product.image}
                       style={styles.cartItemImage}
                     />
                     <View style={styles.cartItemInfo}>
@@ -523,8 +505,9 @@ export default function BuyerScreen() {
                       <Ionicons name="cart-outline" size={14} color="#fff" />
                       <Text style={styles.addButtonText}>Add</Text>
                     </TouchableOpacity>
+                    {/* ✅ Fixed: pass full product object, not product.id */}
                     <TouchableOpacity
-                      onPress={() => toggleWishlist(product.id)}
+                      onPress={() => toggleWishlist(product)}
                       style={{ marginLeft: 8 }}
                     >
                       <Ionicons name="heart" size={20} color="#ef4444" />
@@ -752,6 +735,17 @@ const styles = StyleSheet.create({
   },
   modalTitle: { fontSize: 18, fontWeight: "bold", color: "#111827" },
   modalClose: { padding: 4 },
+  addButton: {
+    backgroundColor: "#10b981",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    gap: 4,
+    marginLeft: 8,
+  },
+  addButtonText: { color: "#fff" },
 
   // Cart items
   cartList: { paddingHorizontal: 20, paddingTop: 8 },

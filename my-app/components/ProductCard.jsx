@@ -1,28 +1,44 @@
 import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useBuyerSignedUp } from "@/lib/market-store";
 import { router } from "expo-router";
+
 import { getAuthState } from "@/lib/auth-store";
+import { useCartStore } from "@/lib/cart-store";
+import { useWishlistStore } from "@/lib/wishlist-store";
 
-export default function ProductCard({
-  product,
-  compact,
-  onAddToCart,
-  isWishlisted,
-  onToggleWishlist,
-}) {
+export default function ProductCard({ product, compact }) {
+  const auth = getAuthState();
 
-  // const buyerSignedUp = useBuyerSignedUp();
-  const isSignedUp = getAuthState();
+  const addToCart = useCartStore((state) => state.addToCart);
+
+  const wishlist = useWishlistStore((state) => state.wishlist);
+  const toggleWishlist = useWishlistStore((state) => state.toggleWishlist);
+
+  const isWishlisted = wishlist.some((item) => item.id === product.id);
+  
+  const handleWishlist = () => {
+    if (auth.isLoggedIn && auth.currentRole === "buyer") {
+      toggleWishlist(product);
+      router.push("/buyer");
+    } else {
+      router.push("/signup?role=buyer&next=/buyer");
+    }
+  };
+
+  const handleAddToCart = () => {
+    if (auth.isLoggedIn && auth.currentRole === "buyer") {
+      addToCart(product);
+      router.push("/buyer");
+    } else {
+      router.push("/signup?role=buyer&next=/buyer");
+    }
+  };
+
   return (
     <View style={[styles.productCard, compact && styles.productCardCompact]}>
       <View style={styles.productImageContainer}>
         <Image source={product.image} style={styles.productImage} />
-        {/* Wishlist button */}
-        <TouchableOpacity
-          style={styles.wishlistBtn}
-          onPress={() => onToggleWishlist(product.id)}
-        >
+        <TouchableOpacity style={styles.wishlistBtn} onPress={handleWishlist}>
           <Ionicons
             name={isWishlisted ? "heart" : "heart-outline"}
             size={16}
@@ -35,6 +51,7 @@ export default function ProductCard({
               <Text style={styles.badgeText}>Featured</Text>
             </View>
           )}
+
           {product.organic && (
             <View style={styles.organicBadge}>
               <Ionicons name="leaf" size={10} color="#fff" />
@@ -47,35 +64,31 @@ export default function ProductCard({
         <Text style={styles.productName} numberOfLines={1}>
           {product.name}
         </Text>
+
         <View style={styles.ratingRow}>
           <Ionicons name="star" size={12} color="#f59e0b" />
           <Text style={styles.ratingText}>{product.rating}</Text>
           <Text style={styles.stockText}>{product.stock} in stock</Text>
         </View>
+
         <Text style={styles.productDescription} numberOfLines={2}>
           {product.description}
         </Text>
+
         <View style={styles.farmRow}>
           <Ionicons name="location-outline" size={12} color="#6b7280" />
           <Text style={styles.farmText} numberOfLines={1}>
             {product.farm}
           </Text>
         </View>
+
         <View style={styles.priceRow}>
           <Text style={styles.priceText}>
             ${product.price.toFixed(2)}
             <Text style={styles.unitText}>{product.unit}</Text>
           </Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => {
-              if (isSignedUp.isLoggedIn && isSignedUp.currentRole == "buyer") {
-                router.push("/buyer");
-              } else {
-                router.push("/signup?role=buyer&next=/buyer");
-              }
-            }}
-          >
+
+          <TouchableOpacity style={styles.addButton} onPress={handleAddToCart}>
             <Ionicons name="cart-outline" size={14} color="#fff" />
             <Text style={styles.addButtonText}>Add</Text>
           </TouchableOpacity>
