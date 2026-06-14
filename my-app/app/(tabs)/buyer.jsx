@@ -140,7 +140,6 @@ function CartModal({
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function BuyerScreen() {
-  // ✅ Fixed: useAuthStore called as a hook, not .useState()
   const initialized = useAuthInitialized();
 
   const [products, setProducts] = useState([]);
@@ -364,7 +363,7 @@ export default function BuyerScreen() {
               {products
                 .filter((p) => p.featured)
                 .map((product) => (
-                  <ProductCard key={product.id} product={product} compact />
+                  <ProductCard key={product.id} product={product} />
                 ))}
             </ScrollView>
           </View>
@@ -432,7 +431,6 @@ export default function BuyerScreen() {
             </View>
           ) : (
             <View style={styles.productsGrid}>
-              {/* ✅ Fixed: added missing key prop */}
               {filteredProducts.map((product) => (
                 <ProductCard key={product.id} product={product} compact />
               ))}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -89,6 +89,22 @@ export default function HomeScreen() {
   useEffect(() => {
     getProducts();
   }, []);
+
+  // ── Filtered products ──────────────────────────────────────────────────────
+  const filteredProducts = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return products.filter((p) => {
+      const matchesCategory =
+        selectedCategory === "All" || p.category === selectedCategory;
+      const matchesSearch =
+        !query ||
+        (p.name || "").toLowerCase().includes(query) ||
+        (p.description || "").toLowerCase().includes(query) ||
+        (p.farm || "").toLowerCase().includes(query) ||
+        (p.category || "").toLowerCase().includes(query);
+      return matchesCategory && matchesSearch;
+    });
+  }, [products, selectedCategory, searchQuery]);
 
   const toggleWishlist = (productId: string) => {
     setWishlist((prev) =>
@@ -307,12 +323,31 @@ export default function HomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-              {products
-                .filter((p) => p.featured)
-                .map((product) => (
-                  <ProductCard product={product} compact />
-                ))}
+            <View style={styles.filteredSection}>
+              {filteredProducts.length === 0 ? (
+                <View style={styles.noResults}>
+                  <Ionicons name="search-outline" size={48} color="#d1d5db" />
+                  <Text style={styles.noResultsText}>No products found</Text>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSearchQuery("");
+                      setSelectedCategory("All");
+                    }}
+                  >
+                    <Text style={styles.clearFilters}>Clear filters</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.productsGrid}>
+                  {filteredProducts.map((product) => (
+                    <ProductCard
+                      key={product.id}
+                      product={product}
+                      compact={false}
+                    />
+                  ))}
+                </View>
+              )}
             </View>
           </View>
         </ScrollView>
@@ -429,6 +464,28 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     gap: 6,
   },
+  productsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 12,
+    marginTop: 8,
+  },
+  filteredSection: {
+    alignItems: "center",
+    justifyContent: "center" ,
+    width: "100%",
+  },
+
+  // Empty states
+  noResults: { alignItems: "center", paddingVertical: 40 },
+  noResultsText: {
+    fontSize: 16,
+    color: "#9ca3af",
+    marginTop: 12,
+    fontWeight: "500",
+  },
+  clearFilters: { marginTop: 8, color: "#10b981", fontWeight: "600" },
   featurePillText: {
     color: "#fff",
     fontSize: 12,
