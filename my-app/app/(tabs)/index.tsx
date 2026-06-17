@@ -340,11 +340,7 @@ export default function HomeScreen() {
               ) : (
                 <View style={styles.productsGrid}>
                   {filteredProducts.map((product) => (
-                    <ProductCard
-                      key={product.id}
-                      product={product}
-                      compact={false}
-                    />
+                    <ProductCard key={product.id} product={product} compact />
                   ))}
                 </View>
               )}
@@ -362,10 +358,12 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: "#f8fafc",
+    overflow: "hidden",
   },
   screen: {
     flex: 1,
     backgroundColor: "#f8fafc",
+    overflow: "hidden",
   },
   content: {
     paddingHorizontal: 18,
@@ -467,13 +465,10 @@ const styles = StyleSheet.create({
   productsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "center",
-    gap: 12,
+    justifyContent: "space-between",
     marginTop: 8,
   },
   filteredSection: {
-    alignItems: "center",
-    justifyContent: "center" ,
     width: "100%",
   },
 
