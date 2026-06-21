@@ -17,7 +17,7 @@ export default function ProductCard({ product, compact }) {
   const isWishlisted = wishlist.some((item) => item.id === product.id);
   
   const handleWishlist = () => {
-    if (auth.isLoggedIn && auth.currentRole === "buyer") {
+    if (auth.isLoggedIn) {
       toggleWishlist(product);
       router.push("/buyer");
     } else {
@@ -26,7 +26,7 @@ export default function ProductCard({ product, compact }) {
   };
 
   const handleAddToCart = () => {
-    if (auth.isLoggedIn && auth.currentRole === "buyer") {
+    if (auth.isLoggedIn) {
       addToCart(product);
       router.push("/buyer");
     } else {

@@ -83,13 +83,13 @@ export default function SignUpScreen() {
   };
 
   const handleSignUp = async () => {
-    console.log("Sign up button pressed", {
-      fullName,
-      email,
-      password,
-      confirmPassword,
-      role,
-    });
+    // console.log("Sign up button pressed", {
+    //   fullName,
+    //   email,
+    //   password,
+    //   confirmPassword,
+    //   role,
+    // });
 
     if (!validate()) {
       showToast("Please correct the errors in the form");
@@ -98,16 +98,7 @@ export default function SignUpScreen() {
 
     setLoading(true);
     try {
-      CreateNewUser({
-        full_name: fullName,
-        email: email,
-        role: role,
-        avatar_url: null,
-        phone: null,
-        bio: null,
-        address: null,
-        is_verified: false,
-      });
+      await registerUser(email, fullName, password, role);
 
       showToast("Account created successfully!", "success");
       setTimeout(() => router.replace("/"), 1500);

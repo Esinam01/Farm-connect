@@ -230,6 +230,19 @@ export async function registerUser(
       }
     }
 
+    if (role === "seller") {
+      const { error: sellerError } = await supabase
+        .from("sellers")
+        .insert([{ id: data.user.id, farm_name: fullName }]);
+
+      if (sellerError && !sellerError.message.includes("duplicate")) {
+        console.error(
+          "Failed to create seller profile:",
+          sellerError.message
+        );
+      }
+    }
+
     const user: User = {
       id: data.user.id,
       email: data.user.email || email,
@@ -241,7 +254,7 @@ export async function registerUser(
       address: "",
     };
 
-    console.log("Final Registered User Object:", user);
+    // console.log("Final Registered User Object:", user);
     state = { ...state, loading: false };
 
     emit();
