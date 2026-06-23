@@ -348,6 +348,26 @@ export async function fetchSellerProducts(sellerId: string) {
   }
 }
 
+export async function fetchSellerStats(
+  sellerId: string
+): Promise<Record<string, { sold: number; revenue: number }>> {
+  const { data, error } = await supabase
+    .from("order_items")
+    .select("product_id, quantity, subtotal")
+    .eq("seller_id", sellerId);
+
+  if (error || !data) return {};
+
+  const stats: Record<string, { sold: number; revenue: number }> = {};
+  for (const item of data) {
+    if (!stats[item.product_id])
+      stats[item.product_id] = { sold: 0, revenue: 0 };
+    stats[item.product_id].sold += item.quantity;
+    stats[item.product_id].revenue += parseFloat(item.subtotal);
+  }
+  return stats;
+}
+
 export function useBuyerSignedUp() {
   return useSyncExternalStore(
     subscribe,

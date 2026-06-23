@@ -25,7 +25,11 @@ import {
 } from "../../lib/market-store";
 import { useUser, logout, supabase } from "../../lib/auth-store";
 import BottomNav from "../../components/BottomNav";
-import { useCategories, fetchCategories } from "../../lib/market-store";
+import {
+  useCategories,
+  fetchCategories,
+  fetchSellerStats,
+} from "../../lib/market-store";
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
 
@@ -79,10 +83,13 @@ const UNITS = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const calcRevenue = (price, sold) =>
-  (parseFloat(price || 0) * (sold || 0)).toFixed(2);
+const calcRevenue = (product) =>
+  (
+    product.revenue ?? parseFloat(product.price || 0) * (product.sold || 0)
+  ).toFixed(2);
+
 const totalRevenue = (products) =>
-  products.reduce((sum, p) => sum + parseFloat(p.price) * p.sold, 0).toFixed(2);
+  products.reduce((sum, p) => sum + (p.revenue ?? 0), 0).toFixed(2);
 const totalSold = (products) => products.reduce((sum, p) => sum + p.sold, 0);
 const emptyForm = () => ({
   name: "",
@@ -93,6 +100,170 @@ const emptyForm = () => ({
   description: "",
   image: "",
 });
+
+// ─── Product Detail Modal ─────────────────────────────────────────────────────
+function ProductDetailModal({ visible, onClose, product, onEdit, onDelete }) {
+  if (!product) return null;
+
+  const revenue = (
+    product.revenue ?? parseFloat(product.price || 0) * (product.sold || 0)
+  ).toFixed(2);
+
+  return (
+    <Modal visible={visible} animationType="slide" transparent>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalSheet}>
+          <View style={styles.modalHandle} />
+          <View style={styles.modalTitleRow}>
+            <Text style={styles.modalTitle}>Product Details</Text>
+            <TouchableOpacity onPress={onClose} style={styles.modalClose}>
+              <Ionicons name="close" size={22} color="#374151" />
+            </TouchableOpacity>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {/* Hero image */}
+            <Image
+              source={{ uri: product.image || product.image_url }}
+              style={detailStyles.heroImage}
+            />
+
+            {/* Badges */}
+            <View style={detailStyles.badgeRow}>
+              {product.is_organic && (
+                <View style={[detailStyles.badge, detailStyles.organicBadge]}>
+                  <Ionicons name="leaf" size={11} color="#16a34a" />
+                  <Text style={[detailStyles.badgeText, { color: "#16a34a" }]}>
+                    Organic
+                  </Text>
+                </View>
+              )}
+              {product.is_featured && (
+                <View style={[detailStyles.badge, detailStyles.featuredBadge]}>
+                  <Ionicons name="star" size={11} color="#d97706" />
+                  <Text style={[detailStyles.badgeText, { color: "#d97706" }]}>
+                    Featured
+                  </Text>
+                </View>
+              )}
+              {product.is_active === false && (
+                <View style={[detailStyles.badge, detailStyles.inactiveBadge]}>
+                  <Text style={[detailStyles.badgeText, { color: "#6b7280" }]}>
+                    Inactive
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Name + price */}
+            <Text style={detailStyles.productTitle}>{product.name}</Text>
+            <Text style={detailStyles.productPrice}>
+              ${parseFloat(product.price).toFixed(2)}
+              <Text style={detailStyles.productUnit}>
+                {" "}
+                /{String(product.unit).replace(/^\//, "")}
+              </Text>
+            </Text>
+
+            {/* Description */}
+            {product.description ? (
+              <Text style={detailStyles.description}>
+                {product.description}
+              </Text>
+            ) : (
+              <Text style={detailStyles.noDescription}>
+                No description provided.
+              </Text>
+            )}
+
+            {/* Stats grid */}
+            <View style={detailStyles.statsGrid}>
+              <View style={detailStyles.statItem}>
+                <Ionicons name="cube-outline" size={18} color="#0891b2" />
+                <Text style={detailStyles.statItemValue}>{product.stock}</Text>
+                <Text style={detailStyles.statItemLabel}>In Stock</Text>
+              </View>
+              <View style={detailStyles.statItem}>
+                <Ionicons name="trending-up" size={18} color="#10b981" />
+                <Text style={detailStyles.statItemValue}>
+                  {product.sold ?? 0}
+                </Text>
+                <Text style={detailStyles.statItemLabel}>Sold</Text>
+              </View>
+              <View style={detailStyles.statItem}>
+                <Ionicons name="cash-outline" size={18} color="#d946ef" />
+                <Text style={detailStyles.statItemValue}>${revenue}</Text>
+                <Text style={detailStyles.statItemLabel}>Revenue</Text>
+              </View>
+              <View style={detailStyles.statItem}>
+                <Ionicons name="star-outline" size={18} color="#d97706" />
+                <Text style={detailStyles.statItemValue}>
+                  {product.rating ? parseFloat(product.rating).toFixed(1) : "—"}
+                </Text>
+                <Text style={detailStyles.statItemLabel}>
+                  Rating ({product.total_reviews ?? 0})
+                </Text>
+              </View>
+            </View>
+
+            {/* Meta rows */}
+            <View style={detailStyles.metaSection}>
+              <DetailRow
+                icon="pricetag-outline"
+                label="Category"
+                value={
+                  product.category ??
+                  `ID ${product.category_id ?? product.categoryId}`
+                }
+              />
+            </View>
+
+            {/* Action buttons */}
+            <View style={detailStyles.actionRow}>
+              <TouchableOpacity
+                style={detailStyles.editBtn}
+                onPress={() => {
+                  onClose();
+                  onEdit(product);
+                }}
+              >
+                <Ionicons name="pencil-outline" size={16} color="#fff" />
+                <Text style={detailStyles.editBtnText}>Edit Product</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={detailStyles.deleteBtn}
+                onPress={() => {
+                  onClose();
+                  onDelete(product);
+                }}
+              >
+                <Ionicons name="trash-outline" size={16} color="#ef4444" />
+                <Text style={detailStyles.deleteBtnText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ height: 32 }} />
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function DetailRow({ icon, label, value }) {
+  return (
+    <View style={detailStyles.detailRow}>
+      <Ionicons
+        name={icon}
+        size={15}
+        color="#9ca3af"
+        style={{ marginRight: 8 }}
+      />
+      <Text style={detailStyles.detailLabel}>{label}</Text>
+      <Text style={detailStyles.detailValue}>{value}</Text>
+    </View>
+  );
+}
 
 // ─── Product Form Modal ───────────────────────────────────────────────────────
 
@@ -111,8 +282,8 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
     if (editProduct) {
       setForm({
         name: editProduct.name,
-        price: editProduct.price,
-        unit: editProduct.unit,
+        price: String(editProduct.price),
+        unit: editProduct.unit?.replace(/^\//, "") ?? "lb",
         stock: String(editProduct.stock),
         categoryId: editProduct.categoryId,
         description: editProduct.description || "",
@@ -133,10 +304,19 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
   const validate = () => {
     const e = {};
     if (!form.name.trim()) e.name = "Product name is required";
-    if (!form.price.trim() || isNaN(form.price) || parseFloat(form.price) <= 0)
+
+    const priceStr = String(form.price ?? "");
+    if (
+      !priceStr.trim() ||
+      isNaN(Number(priceStr)) ||
+      parseFloat(priceStr) <= 0
+    )
       e.price = "Enter a valid price";
-    if (!form.stock.trim() || isNaN(form.stock) || parseInt(form.stock) < 0)
+
+    const stockStr = String(form.stock ?? "");
+    if (!stockStr.trim() || isNaN(Number(stockStr)) || parseInt(stockStr) < 0)
       e.stock = "Enter a valid stock quantity";
+
     if (!form.categoryId) e.categoryId = "Please select a category";
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -149,9 +329,9 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
       `https://images.unsplash.com/photo-1540420773420-3366772f4999?w=300&fit=crop`;
     onSave({
       name: form.name.trim(),
-      price: parseFloat(form.price).toFixed(2),
+      price: parseFloat(String(form.price)).toFixed(2),
       unit: form.unit,
-      stock: parseInt(form.stock),
+      stock: parseInt(String(form.stock)),
       categoryId: form.categoryId,
       description: form.description.trim(),
       image: imageUrl,
@@ -467,6 +647,13 @@ export default function SellerScreen() {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editProduct, setEditProduct] = useState(null);
+  const [detailProduct, setDetailProduct] = useState(null);
+  const [detailVisible, setDetailVisible] = useState(false);
+
+  const openDetail = (product) => {
+    setDetailProduct(product);
+    setDetailVisible(true);
+  };
 
   useEffect(() => {
     if (user) {
@@ -477,9 +664,21 @@ export default function SellerScreen() {
   const loadProducts = async () => {
     if (!user) return;
     setLoading(true);
-    const dbProducts = await fetchSellerProducts(user.id);
+    setProducts([]); // ← clear stale mock data immediately
+
+    const [dbProducts, stats] = await Promise.all([
+      fetchSellerProducts(user.id),
+      fetchSellerStats(user.id),
+    ]);
+
     if (dbProducts && dbProducts.length > 0) {
-      setProducts(dbProducts);
+      setProducts(
+        dbProducts.map((p) => ({
+          ...p,
+          sold: stats[p.id]?.sold ?? 0,
+          revenue: stats[p.id]?.revenue ?? 0,
+        }))
+      );
     }
     setLoading(false);
   };
@@ -511,7 +710,7 @@ export default function SellerScreen() {
           ...formData,
           price: parseFloat(formData.price),
           stock: parseInt(formData.stock),
-          unit: `/${formData.unit}`,
+          unit: `/${formData.unit}`, // formData.unit comes from the form chips (no slash)
         });
         setProducts((prev) =>
           prev.map((p) => (p.id === editProduct.id ? { ...p, ...formData } : p))
@@ -749,84 +948,98 @@ export default function SellerScreen() {
           ) : (
             <>
               <View style={styles.tableHeader}>
-                <Text style={[styles.thCell, { flex: 2.2 }]}>Product</Text>
-                <Text style={[styles.thCell, { flex: 1.4 }]}>Price</Text>
-                <Text
-                  style={[styles.thCell, { flex: 0.9, textAlign: "center" }]}
-                >
+                <Text style={[styles.thCell, { flex: 1 }]}>Product</Text>
+                <Text style={[styles.thCell, { flex: 1, textAlign: "center" }]}>
+                  Price
+                </Text>
+                <Text style={[styles.thCell, { flex: 1, textAlign: "center" }]}>
                   Stock
                 </Text>
-                <Text
-                  style={[styles.thCell, { flex: 0.9, textAlign: "center" }]}
-                >
+                <Text style={[styles.thCell, { flex: 1, textAlign: "center" }]}>
                   Sold
                 </Text>
-                <Text style={[styles.thCell, { flex: 1.5 }]}>Revenue</Text>
-                <Text style={[styles.thCell, { flex: 1, textAlign: "center" }]}>
+                <Text
+                  style={[styles.thCell, { flex: 1, textAlign: "center" }]}
+                >
+                  Revenue
+                </Text>
+                <Text style={[styles.thCell, { flex: 1.2, textAlign: "center" }]}>
                   Actions
                 </Text>
               </View>
 
               {products.map((product, index) => (
-                <View
+                <TouchableOpacity
                   key={product.id}
                   style={[
                     styles.tableRow,
                     index % 2 === 0 && styles.tableRowAlt,
                   ]}
+                  onPress={() => openDetail(product)}
+                  activeOpacity={0.7}
                 >
-                  <View style={{ flex: 2.2, minWidth: 0 }}>
-                    <View style={styles.productThumbRow}>
-                      <Image
-                        source={{ uri: product.image }}
-                        style={styles.productThumb}
-                      />
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text
-                          style={styles.productName}
-                          numberOfLines={1}
-                          ellipsizeMode="tail"
-                        >
-                          {product.name}
-                        </Text>
-                        <View style={styles.categoryBadge}>
-                          <Text style={styles.categoryBadgeText}>
-                            {product.category}
-                          </Text>
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-
-                  <Text
-                    style={[styles.tdCell, styles.priceText, { flex: 1.4 }]}
-                  >
-                    ${product.price}
-                    <Text style={styles.unitText}>/{product.unit}</Text>
-                  </Text>
-
-                  <View style={{ flex: 0.9, alignItems: "center" }}>
-                    <Text style={[styles.tdCell, styles.cyanText]}>
-                      {product.stock}
-                    </Text>
-                  </View>
-
-                  <View style={{ flex: 0.9, alignItems: "center" }}>
-                    <Text style={[styles.tdCell, styles.cyanText]}>
-                      {product.sold}
+                  {/* Product — image above name */}
+                  <View style={{ flex: 1, alignItems: "center" }}>
+                    <Image
+                      source={{ uri: product.image || product.image_url }}
+                      style={styles.productThumbSquare} // update the style below
+                    />
+                    <Text
+                      style={styles.productNameBelow}
+                      numberOfLines={2}
+                      ellipsizeMode="tail"
+                    >
+                      {product.name}
                     </Text>
                   </View>
 
                   <Text
-                    style={[styles.tdCell, styles.greenText, { flex: 1.5 }]}
+                    style={[
+                      styles.tdCell,
+                      styles.priceText,
+                      { flex: 1, textAlign: "center" },
+                    ]}
                   >
-                    ${calcRevenue(product.price, product.sold)}
+                    ${parseFloat(product.price).toFixed(2)}
                   </Text>
 
-                  <View style={[styles.actionsCell, { flex: 1 }]}>
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      styles.cyanText,
+                      { flex: 1, textAlign: "center" },
+                    ]}
+                  >
+                    {product.stock}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      styles.cyanText,
+                      { flex: 1, textAlign: "center" },
+                    ]}
+                  >
+                    {product.sold ?? 0}
+                  </Text>
+
+                  <Text
+                    style={[
+                      styles.tdCell,
+                      styles.greenText,
+                      { flex: 1, textAlign: "center" },
+                    ]}
+                  >
+                    ${calcRevenue(product)}
+                  </Text>
+
+                  <View style={[styles.actionsCell, { flex: 1.2 }]}>
                     <TouchableOpacity
                       style={styles.actionBtnEdit}
-                      onPress={() => openEdit(product)}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        openEdit(product);
+                      }}
                     >
                       <Ionicons
                         name="pencil-outline"
@@ -836,7 +1049,10 @@ export default function SellerScreen() {
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.actionBtnDelete}
-                      onPress={() => handleDelete(product)}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        handleDelete(product);
+                      }}
                     >
                       <Ionicons
                         name="trash-outline"
@@ -845,35 +1061,33 @@ export default function SellerScreen() {
                       />
                     </TouchableOpacity>
                   </View>
-                </View>
+                </TouchableOpacity>
               ))}
 
               {/* Totals row */}
               <View style={styles.totalsRow}>
-                <Text style={[styles.totalLabel, { flex: 2.2 }]}>Totals</Text>
-                <Text style={{ flex: 1.4 }} />
+                <Text style={[styles.totalLabel, { flex: 1.5 }]}>Totals</Text>
+                <Text style={{ flex: 1 }} />
                 <Text
-                  style={[
-                    styles.totalLabel,
-                    { flex: 0.9, textAlign: "center" },
-                  ]}
+                  style={[styles.totalLabel, { flex: 1, textAlign: "center" }]}
                 >
                   {products.reduce((s, p) => s + p.stock, 0)}
                 </Text>
                 <Text
-                  style={[
-                    styles.totalLabel,
-                    { flex: 0.9, textAlign: "center" },
-                  ]}
+                  style={[styles.totalLabel, { flex: 1, textAlign: "center" }]}
                 >
                   {totalSold(products)}
                 </Text>
                 <Text
-                  style={[styles.totalLabel, styles.greenText, { flex: 1.5 }]}
+                  style={[
+                    styles.totalLabel,
+                    styles.greenText,
+                    { flex: 1.2, textAlign: "right" },
+                  ]}
                 >
                   ${totalRevenue(products)}
                 </Text>
-                <View style={{ flex: 1 }} />
+                <View style={{ flex: 0.8 }} />
               </View>
             </>
           )}
@@ -883,6 +1097,17 @@ export default function SellerScreen() {
       </ScrollView>
 
       <BottomNav />
+
+      <ProductDetailModal
+        visible={detailVisible}
+        onClose={() => {
+          setDetailVisible(false);
+          setDetailProduct(null);
+        }}
+        product={detailProduct}
+        onEdit={openEdit}
+        onDelete={handleDelete}
+      />
 
       <ProductFormModal
         visible={modalVisible}
@@ -1121,6 +1346,21 @@ const styles = StyleSheet.create({
     borderColor: "#f0fdf4",
   },
   productName: { fontSize: 13.5, fontWeight: "600", color: "#111827" },
+  productThumbSquare: {
+    width: 38, // was 48
+    height: 38, // was 48
+    borderRadius: 8, // was 10
+    backgroundColor: "#e5e7eb",
+    marginBottom: 4, // was 5
+    resizeMode: "cover",
+  },
+  productNameBelow: {
+    fontSize: 10, // was 11
+    fontWeight: "600",
+    color: "#111827",
+    textAlign: "center",
+    maxWidth: 55, // was 70
+  },
 
   categoryBadge: {
     marginTop: 4,
@@ -1316,4 +1556,105 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   saveBtnText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
+});
+
+const detailStyles = StyleSheet.create({
+  heroImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 14,
+    backgroundColor: "#e5e7eb",
+    marginBottom: 14,
+    resizeMode: "cover",
+  },
+  badgeRow: { flexDirection: "row", gap: 8, marginBottom: 10 },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  organicBadge: { backgroundColor: "#dcfce7" },
+  featuredBadge: { backgroundColor: "#fef9c3" },
+  inactiveBadge: { backgroundColor: "#f3f4f6" },
+  badgeText: { fontSize: 11, fontWeight: "600" },
+  productTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#111827",
+    marginBottom: 4,
+  },
+  productPrice: {
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#10b981",
+    marginBottom: 10,
+  },
+  productUnit: { fontSize: 14, fontWeight: "400", color: "#6b7280" },
+  description: {
+    fontSize: 14,
+    color: "#4b5563",
+    lineHeight: 21,
+    marginBottom: 16,
+  },
+  noDescription: {
+    fontSize: 14,
+    color: "#9ca3af",
+    fontStyle: "italic",
+    marginBottom: 16,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    backgroundColor: "#f9fafb",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    justifyContent: "space-between",
+  },
+  statItem: { alignItems: "center", flex: 1 },
+  statItemValue: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
+    marginTop: 6,
+    marginBottom: 2,
+  },
+  statItemLabel: { fontSize: 10, color: "#6b7280", textAlign: "center" },
+  metaSection: {
+    backgroundColor: "#f9fafb",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 20,
+    gap: 10,
+  },
+  detailRow: { flexDirection: "row", alignItems: "center" },
+  detailLabel: { fontSize: 13, color: "#6b7280", flex: 1 },
+  detailValue: { fontSize: 13, color: "#111827", fontWeight: "600" },
+  actionRow: { flexDirection: "row", gap: 12 },
+  editBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#10b981",
+    paddingVertical: 13,
+    borderRadius: 12,
+    gap: 8,
+  },
+  editBtnText: { color: "#fff", fontSize: 15, fontWeight: "700" },
+  deleteBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#fef2f2",
+    paddingVertical: 13,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#fecaca",
+  },
+  deleteBtnText: { color: "#ef4444", fontSize: 15, fontWeight: "600" },
 });
