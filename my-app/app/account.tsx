@@ -21,6 +21,7 @@ import {
   useUser,
   useAuthStore,
   supabase,
+  deleteAccount,
 } from "../lib/auth-store";
 import BottomNav from "../components/BottomNav";
 
@@ -84,8 +85,11 @@ export default function AccountScreen() {
 
     if (field === "newPassword") {
       if (!value) newErrors.newPassword = "New password is required";
-      else if (value.length < 6) newErrors.newPassword = "Must be at least 6 characters";
-      else if (value === currentPassword) newErrors.newPassword = "New password must differ from current password";
+      else if (value.length < 6)
+        newErrors.newPassword = "Must be at least 6 characters";
+      else if (value === currentPassword)
+        newErrors.newPassword =
+          "New password must differ from current password";
       else delete newErrors.newPassword;
     }
 
@@ -301,6 +305,29 @@ export default function AccountScreen() {
     //     },
     //   },
     // ]);
+  };
+
+  const handleAccountDelete = async () => {
+    console.log("Delete button pressed");
+    
+    Alert.alert(
+      "Delete Account",
+      "This will permanently delete your account and all your data. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await deleteAccount();
+            } catch (err: any) {
+              Alert.alert("Error", err.message || "Failed to delete account.");
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -771,14 +798,6 @@ export default function AccountScreen() {
                 Two-factor authentication coming soon
               </Text>
             </View>
-
-            <TouchableOpacity
-              style={styles.logoutButton}
-              onPress={handleLogout}
-            >
-              <Ionicons name="log-out-outline" size={18} color="#b91c1c" />
-              <Text style={styles.logoutButtonText}>Sign Out</Text>
-            </TouchableOpacity>
           </View>
         )}
 
@@ -856,10 +875,10 @@ export default function AccountScreen() {
 
             <TouchableOpacity
               style={styles.logoutButton}
-              onPress={handleLogout}
+              onPress={handleAccountDelete}
             >
               <Ionicons name="log-out-outline" size={18} color="#b91c1c" />
-              <Text style={styles.logoutButtonText}>Sign Out</Text>
+              <Text style={styles.logoutButtonText}>Delete Account</Text>
             </TouchableOpacity>
           </View>
         )}

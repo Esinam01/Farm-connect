@@ -452,6 +452,34 @@ export async function logout() {
 }
 // No longer using mock admin login
 
+
+//Delete user account
+export async function deleteAccount() {
+  const userId = state.user?.id;
+  if (!userId) throw new Error("No user found");
+
+  if (state.user?.role === "seller") {
+    await supabase.from("sellers").delete().eq("id", userId);
+  }
+
+  await supabase.from("user_profiles").delete().eq("id", userId);
+
+  const { error } = await supabase.rpc("delete_user");
+  if (error) throw error;
+
+  state = {
+    ...state,
+    user: null,
+    isLoggedIn: false,
+    currentRole: null,
+    initialized: true,
+  };
+  emit();
+
+  await supabase.auth.signOut({ scope: "local" });
+}
+
+
 /**
  * Mock login for development bypass (when Supabase rate limits are hit)
  */
