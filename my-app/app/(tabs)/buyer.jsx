@@ -153,14 +153,9 @@ export default function BuyerScreen() {
   const [cartVisible, setCartVisible] = useState(false);
   const [wishlistVisible, setWishlistVisible] = useState(false);
 
-  const {
-    wishlist,
-    toggleWishlist,
-    hydrate: hydrateWishlist,
-  } = useWishlistStore();
+  const { wishlist, toggleWishlist } = useWishlistStore();
 
   const { cart, addToCart, updateQty, removeFromCart } = useCartStore();
-  const hydrateCart = useCartStore((s) => s.hydrate);
 
   const getProducts = async () => {
     try {
@@ -172,8 +167,8 @@ export default function BuyerScreen() {
   };
 
   useEffect(() => {
-    hydrateCart();
-    hydrateWishlist();
+    const unsubscribe = useCartStore.getState().init();
+    const unsubscribe_wishlist = useWishlistStore.getState().init();
 
     if (typeof initialSearch === "string" && initialSearch.trim()) {
       setSearchQuery(initialSearch);
@@ -190,6 +185,11 @@ export default function BuyerScreen() {
         console.error("Failed to parse addProduct param:", e);
       }
     }
+
+    return () => {
+      unsubscribe?.();
+      unsubscribe_wishlist?.();
+    };
   }, [initialSearch]);
 
   // ── Filtered products ──────────────────────────────────────────────────────
