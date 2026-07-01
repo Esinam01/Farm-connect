@@ -71,6 +71,7 @@ const CATEGORIES = [
 const UNITS = [
   "lb",
   "kg",
+  "litre",
   "basket",
   "dozen",
   "gallon",
