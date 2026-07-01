@@ -388,6 +388,18 @@ export async function updateCurrentUserProfile(updates: {
 
     if (dbError) throw dbError;
 
+    // ALSO update the public.sellers table if this user is a seller
+    if (currentUser.role === "seller" && updates.address !== undefined) {
+      const { error: sellerError } = await supabase
+        .from("sellers")
+        .update({
+          farm_location: updates.address,
+        })
+        .eq("id", currentUser.id);
+
+      if (sellerError) throw sellerError;
+    }
+
     const updatedUser: User = {
       ...currentUser,
       fullName: updates.fullName ?? currentUser.fullName,
