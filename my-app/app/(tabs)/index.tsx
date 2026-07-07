@@ -132,7 +132,7 @@ export default function HomeScreen() {
     // Hidden leaf tap functionality removed for real role-based auth
   };
 
-  const featuredCount = products.filter((p) => p.featured).length;
+  const featuredCount = filteredProducts.length;
 
   if (!initialized) {
     return (
@@ -228,37 +228,6 @@ export default function HomeScreen() {
             {/* Admin status messages removed */}
           </View>
 
-          <View style={styles.sectionSpacing}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryRow}
-            >
-              {categories.map((category) => {
-                const active = selectedCategory === category;
-                return (
-                  <TouchableOpacity
-                    key={category}
-                    onPress={() => setSelectedCategory(category)}
-                    style={[
-                      styles.categoryChip,
-                      active && styles.categoryChipActive,
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.categoryText,
-                        active && styles.categoryTextActive,
-                      ]}
-                    >
-                      {category}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-
           <View style={styles.weatherCard}>
             <View style={styles.weatherHeader}>
               <View>
@@ -308,6 +277,37 @@ export default function HomeScreen() {
                 </View>
               </View>
             ))}
+          </View>
+
+          <View style={styles.sectionSpacing}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryRow}
+            >
+              {categories.map((category) => {
+                const active = selectedCategory === category;
+                return (
+                  <TouchableOpacity
+                    key={category}
+                    onPress={() => setSelectedCategory(category)}
+                    style={[
+                      styles.categoryChip,
+                      active && styles.categoryChipActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.categoryText,
+                        active && styles.categoryTextActive,
+                      ]}
+                    >
+                      {category}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
 
           <View style={styles.productsSection}>

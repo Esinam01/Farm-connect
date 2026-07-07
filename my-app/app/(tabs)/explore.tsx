@@ -55,7 +55,7 @@ function SearchCard({ product, onOpen }: SearchCardProps) {
 
         <View style={styles.cardFooter}>
           <View>
-            <Text style={styles.cardPrice}>${product.price.toFixed(2)}</Text>
+            <Text style={styles.cardPrice}>₵{product.price.toFixed(2)}</Text>
             <Text style={styles.cardUnit}>
               per {(product.unit ?? "").replace("/", "")}
             </Text>
@@ -193,28 +193,37 @@ export default function ExploreScreen() {
           })}
         </ScrollView>
 
-        <View style={styles.heroCard}>
-          <View style={styles.heroRow}>
-            <View>
-              <Text style={styles.heroTitle}>Find something fresh</Text>
-              <Text style={styles.heroText}>
-                Search products, then jump into the buyer flow with the exact
-                term you used.
-              </Text>
+        {searchQuery.length === 0 && (
+          <View style={styles.banner}>
+            <View style={styles.bannerHeader}>
+              <Ionicons name="trending-up" size={18} color="#fff" />
+              <View style={styles.trendingBadge}>
+                <Text style={styles.trendingText}>Trending Now</Text>
+              </View>
             </View>
-            <Ionicons
-              name="basket-outline"
-              size={42}
-              color="rgba(255,255,255,0.78)"
-            />
+            <Text style={styles.bannerTitle}>
+              Fresh Farm Products Delivered Daily
+            </Text>
+            <Text style={styles.bannerSubtitle}>
+              Shop organic produce directly from local farmers. Quality
+              guaranteed, sustainable agriculture supported.
+            </Text>
+            <View style={styles.bannerButtons}>
+              <TouchableOpacity
+                style={styles.shopNowButton}
+                onPress={() => setSelectedCategory("All")}
+              >
+                <TouchableOpacity
+                onPress={() => router.push("/buyer")}>
+                  <Text style={styles.shopNowText}>Shop Now</Text>
+                </TouchableOpacity>
+              </TouchableOpacity>
+              {/* <TouchableOpacity style={styles.learnMoreButton}>
+                <Text style={styles.learnMoreText}>Learn More</Text>
+              </TouchableOpacity> */}
+            </View>
           </View>
-          <TouchableOpacity
-            style={styles.heroButton}
-            onPress={() => handleNavigateToBuyer()}
-          >
-            <Text style={styles.heroButtonText}>Open Buyer Search</Text>
-          </TouchableOpacity>
-        </View>
+        )}
 
         <View style={styles.resultsHeader}>
           <Text style={styles.resultsTitle}>Results</Text>
@@ -300,6 +309,52 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     fontSize: 14,
   },
+
+  // Banner
+  banner: {
+    marginHorizontal: 4,
+    marginBottom: 20,
+    padding: 20,
+    borderRadius: 16,
+    backgroundColor: "#10b981",
+  },
+  bannerHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  trendingBadge: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginLeft: 8,
+  },
+  trendingText: { color: "#fff", fontSize: 12, fontWeight: "600" },
+  bannerTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#fff",
+    marginBottom: 6,
+  },
+  bannerSubtitle: {
+    fontSize: 13,
+    color: "#d1fae5",
+    lineHeight: 20,
+    marginBottom: 16,
+  },
+  bannerButtons: { flexDirection: "row", gap: 12 },
+  shopNowButton: {
+    backgroundColor: "#fff",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  shopNowText: { color: "#10b981", fontWeight: "600" },
+  learnMoreButton: {
+    backgroundColor: "rgba(255,255,255,0.2)",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  learnMoreText: { color: "#fff", fontWeight: "600" },
+
   categoryRow: {
     gap: 10,
     paddingRight: 6,

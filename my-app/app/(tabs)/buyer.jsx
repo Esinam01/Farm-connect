@@ -68,10 +68,10 @@ function CartModal({
                         {item.name}
                       </Text>
                       <Text style={styles.cartItemPrice}>
-                        ${(item.price * item.qty).toFixed(2)}
+                        ₵{(item.price * item.qty).toFixed(2)}
                       </Text>
                       <Text style={styles.cartItemUnit}>
-                        ${item.price.toFixed(2)}
+                        ₵{item.price.toFixed(2)}
                         {item.unit}
                       </Text>
                     </View>
@@ -109,7 +109,7 @@ function CartModal({
                   <Text style={styles.summaryLabel}>
                     Subtotal ({cart.reduce((s, i) => s + i.qty, 0)} items)
                   </Text>
-                  <Text style={styles.summaryValue}>${total.toFixed(2)}</Text>
+                  <Text style={styles.summaryValue}>₵{total.toFixed(2)}</Text>
                 </View>
                 <View style={styles.summaryRow}>
                   <Text style={styles.summaryLabel}>Delivery</Text>
@@ -119,7 +119,7 @@ function CartModal({
                 </View>
                 <View style={[styles.summaryRow, styles.totalRow]}>
                   <Text style={styles.totalLabel}>Total</Text>
-                  <Text style={styles.totalValue}>${total.toFixed(2)}</Text>
+                  <Text style={styles.totalValue}>₵{total.toFixed(2)}</Text>
                 </View>
                 <TouchableOpacity
                   style={styles.checkoutBtn}
@@ -234,6 +234,11 @@ export default function BuyerScreen() {
     router.push("/account");
   };
 
+  function handleNavigateToSearch()
+  {
+    router.push("/explore")
+  }
+
   if (!initialized) {
     return (
       <View
@@ -303,54 +308,31 @@ export default function BuyerScreen() {
         </View>
       </View>
 
-      {/* Search Bar */}
-      <View style={styles.searchContainer}>
-        <Ionicons name="search" size={20} color="#9ca3af" />
-        <TextInput
-          style={styles.searchInput}
-          placeholder="Search fresh products..."
-          placeholderTextColor="#9ca3af"
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          returnKeyType="search"
-        />
-        {searchQuery.length > 0 && (
-          <TouchableOpacity onPress={() => setSearchQuery("")}>
-            <Ionicons name="close-circle" size={18} color="#9ca3af" />
-          </TouchableOpacity>
-        )}
-      </View>
-
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Banner — only show when not searching */}
-        {searchQuery.length === 0 && (
-          <View style={styles.banner}>
-            <View style={styles.bannerHeader}>
-              <Ionicons name="trending-up" size={18} color="#fff" />
-              <View style={styles.trendingBadge}>
-                <Text style={styles.trendingText}>Trending Now</Text>
-              </View>
+
+        <View style={styles.heroCard}>
+          <View style={styles.heroRow}>
+            <View>
+              <Text style={styles.heroTitle}>Find something fresh</Text>
+              <Text style={styles.heroText}>
+                Search products, then jump into the buyer flow with the exact
+                term you used.
+              </Text>
             </View>
-            <Text style={styles.bannerTitle}>
-              Fresh Farm Products Delivered Daily
-            </Text>
-            <Text style={styles.bannerSubtitle}>
-              Shop organic produce directly from local farmers. Quality
-              guaranteed, sustainable agriculture supported.
-            </Text>
-            <View style={styles.bannerButtons}>
-              <TouchableOpacity
-                style={styles.shopNowButton}
-                onPress={() => setSelectedCategory("All")}
-              >
-                <Text style={styles.shopNowText}>Shop Now</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.learnMoreButton}>
-                <Text style={styles.learnMoreText}>Learn More</Text>
-              </TouchableOpacity>
-            </View>
+            <Ionicons
+              name="basket-outline"
+              size={42}
+              color="rgba(255,255,255,0.78)"
+            />
           </View>
-        )}
+          <TouchableOpacity
+            style={styles.heroButton}
+            onPress={() => handleNavigateToSearch()}
+          >
+            <Text style={styles.heroButtonText}>Open Buyer Search</Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Featured — only when not searching/filtering */}
         {searchQuery.length === 0 && selectedCategory === "All" && (
@@ -406,7 +388,7 @@ export default function BuyerScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>
               {searchQuery
-                ? `Results for "${searchQuery}"`
+                ? `Results for "₵{searchQuery}"`
                 : selectedCategory === "All"
                 ? "All Products"
                 : selectedCategory}
@@ -489,7 +471,7 @@ export default function BuyerScreen() {
                         {product.name}
                       </Text>
                       <Text style={styles.cartItemPrice}>
-                        ${product.price.toFixed(2)}
+                        ₵{product.price.toFixed(2)}
                         {product.unit}
                       </Text>
                     </View>
@@ -602,6 +584,46 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 15,
     color: "#111827",
+  },
+
+  heroCard: {
+    marginHorizontal: 18,
+    marginBottom: 24,
+    borderRadius: 24,
+    backgroundColor: "#0f9d58",
+    padding: 18,
+  },
+  heroRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  heroTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "800",
+  },
+  heroText: {
+    color: "#d1fae5",
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 6,
+    maxWidth: 260,
+  },
+  heroButton: {
+    marginTop: 14,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: "center",
+  },
+  heroButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "800",
   },
 
   // Content

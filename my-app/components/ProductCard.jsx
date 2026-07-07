@@ -84,7 +84,7 @@ export default function ProductCard({ product, compact }) {
 
         <View style={styles.priceRow}>
           <Text style={styles.priceText}>
-            ${product.price.toFixed(2)}
+            ₵{product.price.toFixed(2)}
             <Text style={styles.unitText}>{product.unit}</Text>
           </Text>
 

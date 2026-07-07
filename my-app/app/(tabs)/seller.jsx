@@ -159,7 +159,7 @@ function ProductDetailModal({ visible, onClose, product, onEdit, onDelete }) {
             {/* Name + price */}
             <Text style={detailStyles.productTitle}>{product.name}</Text>
             <Text style={detailStyles.productPrice}>
-              ${parseFloat(product.price).toFixed(2)}
+              ₵{parseFloat(product.price).toFixed(2)}
               <Text style={detailStyles.productUnit}>
                 {" "}
                 /{String(product.unit).replace(/^\//, "")}
@@ -193,7 +193,7 @@ function ProductDetailModal({ visible, onClose, product, onEdit, onDelete }) {
               </View>
               <View style={detailStyles.statItem}>
                 <Ionicons name="cash-outline" size={18} color="#d946ef" />
-                <Text style={detailStyles.statItemValue}>${revenue}</Text>
+                <Text style={detailStyles.statItemValue}>₵{revenue}</Text>
                 <Text style={detailStyles.statItemLabel}>Revenue</Text>
               </View>
               <View style={detailStyles.statItem}>
@@ -214,7 +214,7 @@ function ProductDetailModal({ visible, onClose, product, onEdit, onDelete }) {
                 label="Category"
                 value={
                   product.category ??
-                  `ID ${product.category_id ?? product.categoryId}`
+                  `ID ₵{product.category_id ?? product.categoryId}`
                 }
               />
             </View>
@@ -437,7 +437,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
               {/* Price + Unit */}
               <View style={styles.row}>
                 <View style={[styles.fieldGroup, { flex: 1.2 }]}>
-                  <Text style={styles.fieldLabel}>Price ($) *</Text>
+                  <Text style={styles.fieldLabel}>Price (₵) *</Text>
                   <TextInput
                     style={[styles.input, errors.price && styles.inputError]}
                     placeholder="0.00"
@@ -610,7 +610,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
                       color="#10b981"
                     />
                     <Text style={styles.previewText}>
-                      Preview: ${parseFloat(form.price).toFixed(2)}/{form.unit}
+                      Preview: ₵{parseFloat(form.price).toFixed(2)}/{form.unit}
                     </Text>
                   </View>
                 )}
@@ -650,11 +650,21 @@ export default function SellerScreen() {
   const [editProduct, setEditProduct] = useState(null);
   const [detailProduct, setDetailProduct] = useState(null);
   const [detailVisible, setDetailVisible] = useState(false);
+  const [avatarUri, setAvatarUri] = useState(null);
 
   const openDetail = (product) => {
     setDetailProduct(product);
     setDetailVisible(true);
   };
+
+  const initials = user?.fullName
+    ? user.fullName
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "U";
 
   useEffect(() => {
     if (user) {
@@ -711,12 +721,12 @@ export default function SellerScreen() {
           ...formData,
           price: parseFloat(formData.price),
           stock: parseInt(formData.stock),
-          unit: `/${formData.unit}`, // formData.unit comes from the form chips (no slash)
+          unit: `/₵{formData.unit}`, // formData.unit comes from the form chips (no slash)
         });
         setProducts((prev) =>
           prev.map((p) => (p.id === editProduct.id ? { ...p, ...formData } : p))
         );
-        Alert.alert("Updated", `"${formData.name}" has been updated.`);
+        Alert.alert("Updated", `"₵{formData.name}" has been updated.`);
       } else {
         await addMarketProduct(
           {
@@ -725,7 +735,7 @@ export default function SellerScreen() {
             stock: formData.stock,
             description: formData.description,
             price: parseFloat(formData.price),
-            unit: `/${formData.unit}`,
+            unit: `/₵{formData.unit}`,
             image: formData.image,
             featured: false,
             organic: true,
@@ -738,7 +748,7 @@ export default function SellerScreen() {
         await loadProducts();
         Alert.alert(
           "Added",
-          `"${formData.name}" has been added to your listings.`
+          `"₵{formData.name}" has been added to your listings.`
         );
       }
     } catch (error) {
@@ -752,7 +762,7 @@ export default function SellerScreen() {
   const handleDelete = (product) => {
     Alert.alert(
       "Delete Product",
-      `Are you sure you want to delete "${product.name}"?`,
+      `Are you sure you want to delete "₵{product.name}"?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -776,6 +786,10 @@ export default function SellerScreen() {
     if (user && user.role !== "seller" && user.role !== "admin") {
       router.replace("/");
     }
+  }, [user]);
+
+  useEffect(() => {
+    if (user?.avatarUrl) setAvatarUri(user.avatarUrl);
   }, [user]);
 
   if (!user) {
@@ -820,20 +834,30 @@ export default function SellerScreen() {
             <Ionicons name="notifications-outline" size={22} color="#fff" />
           </TouchableOpacity>
 
-          <View style={styles.userInfo}>
-            <Text
-              style={styles.userName}
-              numberOfLines={1}
-              ellipsizeMode="tail"
+          <View style={styles.userInfoRow}>
+            <TouchableOpacity
+              style={styles.userAvatarWrap}
+              onPress={() => router.push("/account")} // swap for your route name
+              activeOpacity={0.85}
             >
-              {user?.fullName || "Guest"}
-            </Text>
-            <Text style={styles.userRole}>{user?.role || "Seller"}</Text>
+              {avatarUri ? (
+                <Image
+                  source={{ uri: avatarUri }}
+                  style={styles.userAvatarImage}
+                />
+              ) : (
+                <View style={styles.userAvatarFallback}>
+                  <Text style={styles.userAvatarFallbackText}>
+                    {initials || "U"}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
           </View>
 
-          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+          {/* <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <Ionicons name="log-out-outline" size={22} color="#fff" />
-          </TouchableOpacity>
+          </TouchableOpacity> */}
         </View>
       </View>
 
@@ -872,7 +896,7 @@ export default function SellerScreen() {
                 color="rgba(255,255,255,0.8)"
               />
             </View>
-            <Text style={styles.statValue}>${totalRevenue(products)}</Text>
+            <Text style={styles.statValue}>₵{totalRevenue(products)}</Text>
             <Text style={styles.statChange}>+12% from last month</Text>
           </View>
 
@@ -959,12 +983,12 @@ export default function SellerScreen() {
                 <Text style={[styles.thCell, { flex: 1, textAlign: "center" }]}>
                   Sold
                 </Text>
-                <Text
-                  style={[styles.thCell, { flex: 1, textAlign: "center" }]}
-                >
+                <Text style={[styles.thCell, { flex: 1, textAlign: "center" }]}>
                   Revenue
                 </Text>
-                <Text style={[styles.thCell, { flex: 1.2, textAlign: "center" }]}>
+                <Text
+                  style={[styles.thCell, { flex: 1.2, textAlign: "center" }]}
+                >
                   Actions
                 </Text>
               </View>
@@ -1001,7 +1025,7 @@ export default function SellerScreen() {
                       { flex: 1, textAlign: "center" },
                     ]}
                   >
-                    ${parseFloat(product.price).toFixed(2)}
+                    ₵{parseFloat(product.price).toFixed(2)}
                   </Text>
 
                   <Text
@@ -1031,7 +1055,7 @@ export default function SellerScreen() {
                       { flex: 1, textAlign: "center" },
                     ]}
                   >
-                    ${calcRevenue(product)}
+                    ₵{calcRevenue(product)}
                   </Text>
 
                   <View style={[styles.actionsCell, { flex: 1.2 }]}>
@@ -1086,7 +1110,7 @@ export default function SellerScreen() {
                     { flex: 1.2, textAlign: "right" },
                   ]}
                 >
-                  ${totalRevenue(products)}
+                  ₵{totalRevenue(products)}
                 </Text>
                 <View style={{ flex: 0.8 }} />
               </View>
@@ -1127,6 +1151,36 @@ export default function SellerScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f0fdf4", overflow: "hidden" },
+
+  userInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  userAvatarWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    overflow: "hidden",
+  },
+  userAvatarImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
+  userAvatarFallback: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#2E7D32", // pick a color consistent with your theme
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  userAvatarFallbackText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
 
   // Header
   header: {
