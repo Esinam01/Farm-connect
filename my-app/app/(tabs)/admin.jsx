@@ -13,7 +13,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { supabase } from "../../lib/auth-store";
-import { useUser } from "../../lib/auth-store";
+import { useUser, refreshUser } from "../../lib/auth-store";
 import BottomNav from "../../components/BottomNav";
 
 const tabs = ["Overview", "Users", "Products", "Orders"];
@@ -378,6 +378,9 @@ export default function AdminDashboard() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  const [checking, setChecking] = useState(true);
+  const [checkFailed, setCheckFailed] = useState(false);
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -423,12 +426,48 @@ export default function AdminDashboard() {
   };
 
   useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 10; // ~20s at 2s intervals
+
+    async function verify() {
+      if (user?.role === "admin") {
+        setChecking(false);
+        return;
+      }
+
+      attempts += 1;
+      const refreshed = await refreshUser();
+
+      if (cancelled) return;
+
+      if (refreshed?.role === "admin") {
+        setChecking(false);
+        return;
+      }
+
+      if (attempts >= MAX_ATTEMPTS) {
+        setChecking(false);
+        setCheckFailed(true);
+        return;
+      }
+
+      setTimeout(verify, 2000);
+    }
+
+    verify();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.role]);
+
+  useEffect(() => {
     if (user && user.role === "admin") {
       fetchData();
     }
   }, [user]);
 
-  if (!user || user.role !== "admin") {
+  if (checking) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#c026d3" />

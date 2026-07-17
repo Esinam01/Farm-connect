@@ -18,6 +18,8 @@ import BottomNav from "../../components/BottomNav";
 import { useAuthStore } from "../../lib/auth-store";
 import { FetchAllProducts, Product } from "@/backend/actions";
 import ProductCard from "@/components/ProductCard";
+// import { requestAdminApproval, useAdminApprovalState } from "@/lib/admin-approval-store";
+import { requestAdminApproval, useAdminApprovalState } from "@/lib/admin-approval-store-temp";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
 
@@ -62,11 +64,15 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [cart, setCart] = useState<Product[]>([]);
+  
+  const [leafTapCount, setLeafTapCount] = useState(0);
 
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const { initialized } = useAuthStore.useState();
   const buyerSignedUp = useBuyerSignedUp();
+
+  const adminApproval = useAdminApprovalState();
 
   const handleSearchNavigate = () => {
     const query = searchQuery.trim();
@@ -128,8 +134,88 @@ export default function HomeScreen() {
     });
   };
 
-  const handleLeafTap = () => {
-    // Hidden leaf tap functionality removed for real role-based auth
+  // const handleLeafTap = async () => {
+  //   if (adminApproval.approved) {
+  //     router.push("/admin");
+  //     return;
+  //   }
+
+  //   const nextCount = leafTapCount + 1;
+  //   setLeafTapCount(nextCount);
+
+  //   if (nextCount < 5) {
+  //     if (nextCount === 4) {
+  //       // Alert.alert("Admin Unlock", "Tap once more to request admin approval.");
+  //       console.log("Admin Unlock", "Tap once more to request admin approval.");
+  //     }
+  //     return;
+  //   }
+
+  //   setLeafTapCount(0);
+  //   const result = await requestAdminApproval();
+
+  //   if (!result.ok) {
+  //     // Alert.alert("Approval Error", result.message || "Could not start admin approval.");
+  //     console.log("Approval Error", result.message || "Could not start admin approval.");
+  //     return;
+  //   }
+
+  //   if (result.emailed) {
+  //     // Alert.alert(
+  //     //   "Approval Requested",
+  //     //   "Verification email sent to marydoo211@gmail.com. Admin opens automatically after approval."
+  //     // );
+  //     console.log(
+  //       "Approval Requested",
+  //       "Verification email sent to marydoo211@gmail.com. Admin opens automatically after approval."
+  //     );
+  //     return;
+  //   }
+
+  //   // Alert.alert(
+  //   //   "Approval Pending (Email Not Configured)",
+  //   //   `${result.message}${result.approveUrl ? `\n\nManual approve URL:\n${result.approveUrl}` : ""}`
+  //   // );
+  //   console.log(
+  //     "Approval Pending (Email Not Configured)",
+  //     `${result.message}${result.approveUrl ? `\n\nManual approve URL:\n${result.approveUrl}` : ""}`
+  //   );
+  // };
+
+  const handleLeafTap = async () => {
+    if (adminApproval.approved) {
+      router.push("/admin");
+      return;
+    }
+  
+    const nextCount = leafTapCount + 1;
+    setLeafTapCount(nextCount);
+  
+    if (nextCount < 5) {
+      if (nextCount === 4) {
+        // Alert.alert("Admin Unlock", "Tap once more to request admin approval.");
+        console.log("Admin Unlock", "Tap once more to request admin approval.");
+      }
+      return;
+    }
+  
+    setLeafTapCount(0);
+    const result = await requestAdminApproval();
+  
+    if (!result.ok) {
+      // Alert.alert("Approval Error", result.message || "Could not start admin approval.");
+      console.log("Approval Error", result.message || "Could not start admin approval.");
+      return;
+    }
+  
+    // Alert.alert(
+    //   "Approval Requested",
+    //   `${result.message}\n\nAn admin needs to approve this in the database. The app will unlock automatically once approved.`
+    // );
+    console.log(
+      "Approval Requested",
+      `${result.message}\n\nAn admin needs to approve this in the database. The app will unlock automatically once approved.`
+    );
   };
 
   const featuredCount = filteredProducts.length;

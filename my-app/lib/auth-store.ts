@@ -95,6 +95,46 @@ function handleAuthState(session: Session | null) {
   emit();
 }
 
+export async function refreshUser(): Promise<User | null> {
+  if (!supabase) return null;
+
+  const {
+    data: { session },
+  } = await supabase.auth.getSession();
+
+  if (!session?.user) {
+    state = { ...state, user: null, isLoggedIn: false, currentRole: null };
+    emit();
+    return null;
+  }
+
+  const { data: profile, error } = await supabase
+    .from("user_profiles")
+    .select("*")
+    .eq("id", session.user.id)
+    .single();
+
+  if (error) {
+    console.warn("refreshUser: profile fetch failed:", error.message);
+    return state.user;
+  }
+
+  const updatedUser: User = {
+    id: session.user.id,
+    email: session.user.email || "",
+    fullName: profile?.full_name || session.user.user_metadata?.full_name || "User",
+    role: profile?.role || session.user.user_metadata?.role || "buyer",
+    createdAt: new Date(session.user.created_at).getTime(),
+    avatarUri: profile?.avatar_url ?? session.user.user_metadata?.avatar_url ?? null,
+    phone: profile?.phone ?? session.user.user_metadata?.phone ?? "",
+    address: profile?.address ?? session.user.user_metadata?.address ?? "",
+  };
+
+  state = { ...state, user: updatedUser, currentRole: updatedUser.role, isLoggedIn: true };
+  emit();
+  return updatedUser;
+}
+
 export function subscribe(listener: () => void) {
   listeners.add(listener);
   return () => listeners.delete(listener);
