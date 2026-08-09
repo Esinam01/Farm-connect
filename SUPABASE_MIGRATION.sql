@@ -270,6 +270,45 @@ CREATE INDEX idx_audit_resource ON audit_logs(resource_type, resource_id);
 CREATE INDEX idx_audit_created ON audit_logs(created_at DESC);
 
 -- ============================================================================
+-- 13. NOTIFICATIONS
+-- ============================================================================
+
+-- notifications table
+create table notifications (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  title text not null,
+  message text,
+  type text default 'general', -- e.g. 'order', 'alert', 'system'
+  is_read boolean default false,
+  created_at timestamptz default now()
+);
+
+create index notifications_user_id_idx on notifications(user_id);
+create index notifications_user_unread_idx on notifications(user_id, is_read);
+
+alter table notifications enable row level security;
+
+-- users can only see/manage their own notifications
+create policy "Users can view own notifications"
+  on notifications for select
+  using (auth.uid() = user_id);
+
+create policy "Users can update own notifications"
+  on notifications for update
+  using (auth.uid() = user_id);
+
+create policy "Users can delete own notifications"
+  on notifications for delete
+  using (auth.uid() = user_id);
+
+-- allow inserts from any authenticated context (so other parts of the app,
+-- or a service role backend job, can create notifications for a user)
+create policy "Authenticated users can insert notifications"
+  on notifications for insert
+  with check (auth.role() = 'authenticated');
+
+-- ============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================================================
 

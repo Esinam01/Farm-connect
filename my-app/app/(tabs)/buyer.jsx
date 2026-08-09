@@ -16,6 +16,9 @@ import { router, useLocalSearchParams } from "expo-router";
 import BottomNav from "../../components/BottomNav";
 import { useAuthInitialized } from "../../lib/auth-store";
 import { FetchAllProducts } from "../../backend/actions";
+import { getAuthState } from "@/lib/auth-store";
+import { useNotificationStore } from "../../lib/notificationStore";
+import NotificationsModal from "../../components/NotificationsModal";
 import ProductCard from "../../components/ProductCard";
 import { useCartStore } from "../../lib/cart-store";
 import { useWishlistStore } from "../../lib/wishlist-store";
@@ -153,6 +156,11 @@ export default function BuyerScreen() {
   const [cartVisible, setCartVisible] = useState(false);
   const [wishlistVisible, setWishlistVisible] = useState(false);
 
+  const { user } = getAuthState();
+  const { notifications, init } = useNotificationStore();
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+
   const { wishlist, toggleWishlist } = useWishlistStore();
 
   const { cart, addToCart, updateQty, removeFromCart } = useCartStore();
@@ -191,6 +199,10 @@ export default function BuyerScreen() {
       unsubscribe_wishlist?.();
     };
   }, [initialSearch]);
+
+  useEffect(() => {
+    if (user?.id) init(user.id);
+  }, [user?.id]);
 
   // ── Filtered products ──────────────────────────────────────────────────────
   const filteredProducts = useMemo(() => {
@@ -234,9 +246,8 @@ export default function BuyerScreen() {
     router.push("/account");
   };
 
-  function handleNavigateToSearch()
-  {
-    router.push("/explore")
+  function handleNavigateToSearch() {
+    router.push("/explore");
   }
 
   if (!initialized) {
@@ -269,8 +280,16 @@ export default function BuyerScreen() {
         </View>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => setNotificationsVisible(true)}
+          >
             <Ionicons name="notifications-outline" size={22} color="#6b7280" />
+            {unreadCount > 0 && (
+              <View style={styles.iconBadge}>
+                <Text style={styles.iconBadgeText}>{unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           {/* Wishlist button */}
@@ -422,6 +441,11 @@ export default function BuyerScreen() {
       </ScrollView>
 
       <BottomNav />
+
+      <NotificationsModal
+        visible={notificationsVisible}
+        onClose={() => setNotificationsVisible(false)}
+      />
 
       {/* Cart Modal */}
       <CartModal

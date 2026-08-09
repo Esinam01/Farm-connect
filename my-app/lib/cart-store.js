@@ -53,10 +53,14 @@ export const useCartStore = create((set, get) => ({
 
   addToCart: (product) => {
     const { cart, _persist } = get();
-    const existing = cart.find((i) => i.id === product.id);
+    const normalized = {
+      ...product,
+      sellerId: product.sellerId ?? product.seller_id,
+    };
+    const existing = cart.find((i) => i.id === normalized.id);
     const newCart = existing
-      ? cart.map((i) => (i.id === product.id ? { ...i, qty: i.qty + 1 } : i))
-      : [...cart, { ...product, qty: 1 }];
+      ? cart.map((i) => (i.id === normalized.id ? { ...i, qty: i.qty + 1 } : i))
+      : [...cart, { ...normalized, qty: 1 }];
     set({ cart: newCart });
     _persist(newCart);
   },

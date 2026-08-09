@@ -96,6 +96,12 @@ export default function HomeScreen() {
     getProducts();
   }, []);
 
+  useEffect(() => {
+    if (adminApproval.approved) {
+      router.push("/admin");
+    }
+  }, [adminApproval.approved]);
+
   // ── Filtered products ──────────────────────────────────────────────────────
   const filteredProducts = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();

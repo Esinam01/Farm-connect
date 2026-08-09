@@ -14,6 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
+import { getAuthState } from "@/lib/auth-store";
+import { useNotificationStore } from "../lib/notificationStore";
+import {showAlert} from "../lib/alert";
+import { useCartStore } from "@/lib/cart-store";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -26,14 +30,27 @@ Notifications.setNotificationHandler({
 });
 
 const PAYMENT_NETWORKS = [
-  { code: "MTN", name: "MTN Mobile Money", icon: "phone-portrait-outline" as const },
-  { code: "AIRTELTIGO", name: "AirtelTigo Money", icon: "phone-portrait-outline" as const },
-  { code: "VODAFONE", name: "Vodafone Cash", icon: "phone-portrait-outline" as const },
+  {
+    code: "MTN",
+    name: "MTN Mobile Money",
+    icon: "phone-portrait-outline" as const,
+  },
+  {
+    code: "AIRTELTIGO",
+    name: "AirtelTigo Money",
+    icon: "phone-portrait-outline" as const,
+  },
+  {
+    code: "VODAFONE",
+    name: "Vodafone Cash",
+    icon: "phone-portrait-outline" as const,
+  },
 ];
 
 function resolveApiBaseUrl() {
   const configured =
-    process.env.EXPO_PUBLIC_ADMIN_APPROVAL_API_URL?.trim() || "http://localhost:5050";
+    process.env.EXPO_PUBLIC_ADMIN_APPROVAL_API_URL?.trim() ||
+    "http://localhost:5050";
 
   if (!configured.includes("localhost") && !configured.includes("127.0.0.1")) {
     return configured;
@@ -49,9 +66,7 @@ function resolveApiBaseUrl() {
   const host = hostCandidates[0]?.split(":")[0];
 
   if (host) {
-    return configured
-      .replace("localhost", host)
-      .replace("127.0.0.1", host);
+    return configured.replace("localhost", host).replace("127.0.0.1", host);
   }
 
   if (Platform.OS === "android") {
@@ -67,7 +82,7 @@ function normalizeApiBaseUrl(raw: string): string {
   if (!raw || typeof raw !== "string") return "";
   let u = raw.trim();
   u = u.replace(/\/+$/, "");
-  if (/:\\d{2,5}/.test(u)) return u;
+  if (/:\d{2,5}/.test(u)) return u;
   const m = u.match(/\.(\d{2,5})(?:$|\/)/);
   if (m) {
     u = u.replace(`.${m[1]}`, `:${m[1]}`);
@@ -75,11 +90,18 @@ function normalizeApiBaseUrl(raw: string): string {
   return u;
 }
 
-async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestInit = {}, timeout: number = 10000) {
+async function fetchWithTimeout(
+  resource: RequestInfo | URL,
+  options: RequestInit = {},
+  timeout: number = 10000
+) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   try {
-    const resp = await fetch(resource, { ...options, signal: controller.signal });
+    const resp = await fetch(resource, {
+      ...options,
+      signal: controller.signal,
+    });
     clearTimeout(id);
     return resp;
   } catch (err) {
@@ -88,9 +110,9 @@ async function fetchWithTimeout(resource: RequestInfo | URL, options: RequestIni
   }
 }
 
-
 type CartItem = {
   id: number;
+  sellerId: string;
   name: string;
   price: number;
   qty: number;
@@ -99,13 +121,15 @@ type CartItem = {
 };
 
 export default function CheckoutScreen() {
-  const API_URL = normalizeApiBaseUrl(resolveApiBaseUrl());
+  const API_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
   const params = useLocalSearchParams();
   const paymentReminderSentForOrder = useRef<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [currentStep, setCurrentStep] = useState(1); // 1: Details, 2: Payment Method, 3: Payment
   const [loading, setLoading] = useState(false);
   const [orderCreationError, setOrderCreationError] = useState("");
+
+  const {clearCart} = useCartStore();
 
   // Form state
   const [buyerName, setBuyerName] = useState("");
@@ -124,12 +148,14 @@ export default function CheckoutScreen() {
   useEffect(() => {
     if (params.cart) {
       try {
-        const cartParam = Array.isArray(params.cart) ? params.cart[0] : params.cart;
+        const cartParam = Array.isArray(params.cart)
+          ? params.cart[0]
+          : params.cart;
         const parsedCart = JSON.parse(decodeURIComponent(cartParam));
         setCart(parsedCart);
       } catch (error) {
         console.error("Failed to parse cart:", error);
-        Alert.alert("Error", "Failed to load cart items");
+        showAlert("Error", "Failed to load cart items");
         router.back();
       }
     }
@@ -139,7 +165,10 @@ export default function CheckoutScreen() {
     Notifications.requestPermissionsAsync().catch(() => null);
   }, []);
 
-  const totalAmount = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
+  const totalAmount = cart.reduce(
+    (sum, item) => sum + item.price * item.qty,
+    0
+  );
 
   useEffect(() => {
     if (currentStep !== 2 || !orderId) {
@@ -154,7 +183,9 @@ export default function CheckoutScreen() {
     Notifications.scheduleNotificationAsync({
       content: {
         title: "Complete your payment",
-        body: `Your FarmConnect order total is GHS ${totalAmount.toFixed(2)}. Tap to finish payment.`,
+        body: `Your FarmConnect order total is GHS ${totalAmount.toFixed(
+          2
+        )}. Tap to finish payment.`,
         data: { orderId },
       },
       trigger: null,
@@ -164,19 +195,19 @@ export default function CheckoutScreen() {
   // Validate buyer details
   const validateBuyerDetails = () => {
     if (!buyerName.trim()) {
-      Alert.alert("Validation", "Please enter your full name");
+      showAlert("Validation", "Please enter your full name");
       return false;
     }
     if (!buyerEmail.trim() || !buyerEmail.includes("@")) {
-      Alert.alert("Validation", "Please enter a valid email address");
+      showAlert("Validation", "Please enter a valid email address");
       return false;
     }
     if (!buyerPhone.trim()) {
-      Alert.alert("Validation", "Please enter your phone number");
+      showAlert("Validation", "Please enter your phone number");
       return false;
     }
     if (!deliveryAddress.trim()) {
-      Alert.alert("Validation", "Please enter your delivery address");
+      showAlert("Validation", "Please enter your delivery address");
       return false;
     }
     return true;
@@ -186,6 +217,13 @@ export default function CheckoutScreen() {
   const handleProceedToPayment = async () => {
     if (!validateBuyerDetails()) return;
 
+    const { user } = getAuthState();
+    if (!user?.id) {
+      showAlert("Sign In Required", "Please sign in to complete your order.");
+      router.push("/Login");
+      return;
+    }
+
     setOrderCreationError("");
     setCurrentStep(2);
 
@@ -193,27 +231,34 @@ export default function CheckoutScreen() {
     setLoading(true);
     try {
       // Create order
-      const orderResponse = await fetchWithTimeout(`${API_URL}/orders`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          buyerEmail,
-          buyerPhone,
-          items: cart,
-          totalAmount,
-          deliveryAddress,
-          notes,
-          paymentMethod: paymentMethod === "card" ? "card" : "momo",
-        }),
-      }, 15000);
+      const orderResponse = await fetchWithTimeout(
+        `${API_URL}/orders`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            buyerId: getAuthState().user?.id,
+            buyerEmail,
+            buyerPhone,
+            items: cart,
+            totalAmount,
+            deliveryAddress,
+            notes,
+            paymentMethod: paymentMethod === "card" ? "card" : "momo",
+          }),
+        },
+        15000
+      );
 
       const orderData = await orderResponse.json();
 
       if (!orderData.ok) {
         setOrderCreationError(orderData.error || "Failed to create order.");
-        Alert.alert(
+        showAlert(
           "Order Error",
-          `${orderData.error || "Failed to create order"}\n\nAPI: ${API_URL}/orders`
+          `${
+            orderData.error || "Failed to create order"
+          }\n\nAPI: ${API_URL}/orders`
         );
         return;
       }
@@ -223,7 +268,7 @@ export default function CheckoutScreen() {
       console.error("Order creation error:", error);
       const message = `Failed to create order. Please check backend connection.\n\nAPI: ${API_URL}/orders`;
       setOrderCreationError(message);
-      Alert.alert("Error", message);
+      showAlert("Error", message);
     } finally {
       setLoading(false);
     }
@@ -232,29 +277,37 @@ export default function CheckoutScreen() {
   // Initiate card payment
   const handleCardPayment = async () => {
     if (!orderId) {
-      Alert.alert(
+      showAlert(
         "Order Not Ready",
-        orderCreationError || "Please wait for the order to finish saving, then try again."
+        orderCreationError ||
+          "Please wait for the order to finish saving, then try again."
       );
       return;
     }
 
     setLoading(true);
     try {
-      const paymentResponse = await fetchWithTimeout(`${API_URL}/orders/${orderId}/pay-card`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      }, 15000);
+      const paymentResponse = await fetchWithTimeout(
+        `${API_URL}/orders/${orderId}/pay-card`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+        15000
+      );
 
       const paymentData = await paymentResponse.json();
 
       if (!paymentData.ok) {
-        Alert.alert("Payment Error", paymentData.error || "Failed to initiate payment");
+        showAlert(
+          "Payment Error",
+          paymentData.error || "Failed to initiate payment"
+        );
         return;
       }
 
       // In production, open the Paystack authorization URL
-      Alert.alert(
+      showAlert(
         "Card Payment",
         `Test Mode: Payment reference is ${paymentData.reference}\n\nIn production, you would be redirected to Paystack to complete payment.`,
         [
@@ -270,7 +323,7 @@ export default function CheckoutScreen() {
       );
     } catch (error) {
       console.error("Card payment error:", error);
-      Alert.alert("Error", "Failed to initiate card payment");
+      showAlert("Error", "Failed to initiate card payment");
     } finally {
       setLoading(false);
     }
@@ -279,40 +332,50 @@ export default function CheckoutScreen() {
   // Initiate mobile money payment
   const handleMobileMoneyPayment = async () => {
     if (!paymentPhone.trim()) {
-      Alert.alert("Validation", "Please enter your phone number for payment");
+      showAlert("Validation", "Please enter your phone number for payment");
       return;
     }
 
     if (!orderId) {
-      Alert.alert(
+      showAlert(
         "Order Not Ready",
-        orderCreationError || "Please wait for the order to finish saving, then try again."
+        orderCreationError ||
+          "Please wait for the order to finish saving, then try again."
       );
       return;
     }
 
     setLoading(true);
     try {
-      const paymentResponse = await fetchWithTimeout(`${API_URL}/orders/${orderId}/pay-momo`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phoneNumber: paymentPhone,
-          network: selectedNetwork,
-        }),
-      }, 15000);
+      const paymentResponse = await fetchWithTimeout(
+        `${API_URL}/orders/${orderId}/pay-momo`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phoneNumber: paymentPhone,
+            network: selectedNetwork,
+          }),
+        },
+        15000
+      );
 
       const paymentData = await paymentResponse.json();
 
       if (!paymentData.ok) {
-        Alert.alert("Payment Error", paymentData.error || "Failed to initiate payment");
+        showAlert(
+          "Payment Error",
+          paymentData.error || "Failed to initiate payment"
+        );
         return;
       }
 
       // Show payment instructions
-      Alert.alert(
+      showAlert(
         "Mobile Money Payment",
-        `${paymentData.message}\n\nUSSD Code: ${paymentData.ussdCode}\n\nAmount: GHS ${totalAmount.toFixed(2)}`,
+        `${paymentData.message}\n\nUSSD Code: ${
+          paymentData.ussdCode
+        }\n\nAmount: GHS ${totalAmount.toFixed(2)}`,
         [
           {
             text: "Cancel",
@@ -326,7 +389,7 @@ export default function CheckoutScreen() {
       );
     } catch (error) {
       console.error("Mobile money payment error:", error);
-      Alert.alert("Error", "Failed to initiate mobile money payment");
+      showAlert("Error", "Failed to initiate mobile money payment");
     } finally {
       setLoading(false);
     }
@@ -334,14 +397,32 @@ export default function CheckoutScreen() {
 
   // Handle payment success
   const handlePaymentSuccess = async () => {
-    Alert.alert("Success", "Thank you for your purchase! Your order has been confirmed.", [
-      {
-        text: "Done",
-        onPress: () => {
-          router.replace("/buyer");
+    const { user } = getAuthState();
+
+    if (user?.id) {
+      await useNotificationStore.getState().notify({
+        title: "Order confirmed",
+        message:
+          "Your payment was successful and your order has been confirmed.",
+        type: "order",
+      });
+    }
+
+    showAlert(
+      "Success",
+      "Thank you for your purchase! Your order has been confirmed.",
+      [
+        {
+          text: "Done",
+          onPress: () => {
+            router.replace("/buyer");
+          },
         },
-      },
-    ]);
+      ]
+    );
+    
+    clearCart();
+    
   };
 
   // Render step 1: Buyer details
@@ -411,7 +492,11 @@ export default function CheckoutScreen() {
       </View>
 
       <TouchableOpacity
-        style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled]}
+        style={[
+          styles.button,
+          styles.primaryButton,
+          loading && styles.buttonDisabled,
+        ]}
         onPress={handleProceedToPayment}
         disabled={loading}
       >
@@ -441,18 +526,29 @@ export default function CheckoutScreen() {
 
       {/* Card Payment Option */}
       <TouchableOpacity
-        style={[styles.paymentOption, paymentMethod === "card" && styles.paymentOptionSelected]}
+        style={[
+          styles.paymentOption,
+          paymentMethod === "card" && styles.paymentOptionSelected,
+        ]}
         onPress={() => setPaymentMethod("card")}
       >
         <View style={styles.paymentOptionContent}>
-          <Ionicons name="card-outline" size={24} color={paymentMethod === "card" ? "#10b981" : "#6b7280"} />
+          <Ionicons
+            name="card-outline"
+            size={24}
+            color={paymentMethod === "card" ? "#10b981" : "#6b7280"}
+          />
           <View style={styles.paymentOptionText}>
             <Text style={styles.paymentOptionTitle}>Credit/Debit Card</Text>
-            <Text style={styles.paymentOptionDesc}>Visa, Mastercard via Paystack</Text>
+            <Text style={styles.paymentOptionDesc}>
+              Visa, Mastercard via Paystack
+            </Text>
           </View>
         </View>
         <Ionicons
-          name={paymentMethod === "card" ? "checkmark-circle" : "ellipse-outline"}
+          name={
+            paymentMethod === "card" ? "checkmark-circle" : "ellipse-outline"
+          }
           size={20}
           color={paymentMethod === "card" ? "#10b981" : "#d1d5db"}
         />
@@ -460,18 +556,29 @@ export default function CheckoutScreen() {
 
       {/* Mobile Money Option */}
       <TouchableOpacity
-        style={[styles.paymentOption, paymentMethod === "momo" && styles.paymentOptionSelected]}
+        style={[
+          styles.paymentOption,
+          paymentMethod === "momo" && styles.paymentOptionSelected,
+        ]}
         onPress={() => setPaymentMethod("momo")}
       >
         <View style={styles.paymentOptionContent}>
-          <Ionicons name="phone-portrait-outline" size={24} color={paymentMethod === "momo" ? "#10b981" : "#6b7280"} />
+          <Ionicons
+            name="phone-portrait-outline"
+            size={24}
+            color={paymentMethod === "momo" ? "#10b981" : "#6b7280"}
+          />
           <View style={styles.paymentOptionText}>
             <Text style={styles.paymentOptionTitle}>Mobile Money</Text>
-            <Text style={styles.paymentOptionDesc}>MTN, AirtelTigo, Vodafone</Text>
+            <Text style={styles.paymentOptionDesc}>
+              MTN, AirtelTigo, Vodafone
+            </Text>
           </View>
         </View>
         <Ionicons
-          name={paymentMethod === "momo" ? "checkmark-circle" : "ellipse-outline"}
+          name={
+            paymentMethod === "momo" ? "checkmark-circle" : "ellipse-outline"
+          }
           size={20}
           color={paymentMethod === "momo" ? "#10b981" : "#d1d5db"}
         />
@@ -480,15 +587,31 @@ export default function CheckoutScreen() {
       {/* Mobile Money Network Selection */}
       {paymentMethod === "momo" && (
         <>
-          <Text style={[styles.label, { marginTop: 24 }]}>Select Your Network</Text>
+          <Text style={[styles.label, { marginTop: 24 }]}>
+            Select Your Network
+          </Text>
           {PAYMENT_NETWORKS.map((network) => (
             <TouchableOpacity
               key={network.code}
-              style={[styles.networkOption, selectedNetwork === network.code && styles.networkOptionSelected]}
+              style={[
+                styles.networkOption,
+                selectedNetwork === network.code &&
+                  styles.networkOptionSelected,
+              ]}
               onPress={() => setSelectedNetwork(network.code)}
             >
-              <Ionicons name={network.icon} size={20} color={selectedNetwork === network.code ? "#10b981" : "#6b7280"} />
-              <Text style={[styles.networkName, selectedNetwork === network.code && styles.networkNameSelected]}>
+              <Ionicons
+                name={network.icon}
+                size={20}
+                color={selectedNetwork === network.code ? "#10b981" : "#6b7280"}
+              />
+              <Text
+                style={[
+                  styles.networkName,
+                  selectedNetwork === network.code &&
+                    styles.networkNameSelected,
+                ]}
+              >
                 {network.name}
               </Text>
               {selectedNetwork === network.code ? (
@@ -523,7 +646,12 @@ export default function CheckoutScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled, { flex: 1, marginLeft: 12 }]}
+          style={[
+            styles.button,
+            styles.primaryButton,
+            loading && styles.buttonDisabled,
+            { flex: 1, marginLeft: 12 },
+          ]}
           onPress={() => setCurrentStep(3)}
           disabled={loading}
         >
@@ -559,7 +687,9 @@ export default function CheckoutScreen() {
         <View style={styles.summaryDivider} />
         <View style={styles.summaryTotal}>
           <Text style={styles.summaryTotalLabel}>Total Amount</Text>
-          <Text style={styles.summaryTotalValue}>GHS {totalAmount.toFixed(2)}</Text>
+          <Text style={styles.summaryTotalValue}>
+            GHS {totalAmount.toFixed(2)}
+          </Text>
         </View>
       </View>
 
@@ -576,7 +706,9 @@ export default function CheckoutScreen() {
       <View style={styles.summaryCard}>
         <Text style={styles.summaryTitle}>Payment Method</Text>
         <Text style={styles.summaryText}>
-          {paymentMethod === "card" ? "Credit/Debit Card (Paystack)" : `${selectedNetwork} Mobile Money`}
+          {paymentMethod === "card"
+            ? "Credit/Debit Card (Paystack)"
+            : `${selectedNetwork} Mobile Money`}
         </Text>
       </View>
 
@@ -591,8 +723,17 @@ export default function CheckoutScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.button, styles.primaryButton, loading && styles.buttonDisabled, { flex: 1, marginLeft: 12 }]}
-          onPress={paymentMethod === "card" ? handleCardPayment : handleMobileMoneyPayment}
+          style={[
+            styles.button,
+            styles.primaryButton,
+            loading && styles.buttonDisabled,
+            { flex: 1, marginLeft: 12 },
+          ]}
+          onPress={
+            paymentMethod === "card"
+              ? handleCardPayment
+              : handleMobileMoneyPayment
+          }
           disabled={loading}
         >
           {loading ? (
@@ -655,61 +796,172 @@ export default function CheckoutScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f9fafb" },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingTop: 50, paddingBottom: 12, backgroundColor: "#fff", borderBottomWidth: 1, borderBottomColor: "#e5e7eb" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingTop: 50,
+    paddingBottom: 12,
+    backgroundColor: "#fff",
+    borderBottomWidth: 1,
+    borderBottomColor: "#e5e7eb",
+  },
   headerTitle: { fontSize: 18, fontWeight: "bold", color: "#111827" },
 
   // Progress
-  progressContainer: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 24, paddingHorizontal: 16, backgroundColor: "#fff" },
-  progressDot: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#e5e7eb", justifyContent: "center", alignItems: "center" },
+  progressContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+    paddingHorizontal: 16,
+    backgroundColor: "#fff",
+  },
+  progressDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#e5e7eb",
+    justifyContent: "center",
+    alignItems: "center",
+  },
   progressDotActive: { backgroundColor: "#10b981" },
   progressDotText: { color: "#fff", fontWeight: "bold", fontSize: 14 },
-  progressLine: { width: 40, height: 2, backgroundColor: "#e5e7eb", marginHorizontal: 8 },
+  progressLine: {
+    width: 40,
+    height: 2,
+    backgroundColor: "#e5e7eb",
+    marginHorizontal: 8,
+  },
   progressLineActive: { backgroundColor: "#10b981" },
 
   // Content
   content: { flex: 1 },
   stepContainer: { padding: 20 },
-  stepTitle: { fontSize: 18, fontWeight: "bold", color: "#111827", marginBottom: 20 },
+  stepTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#111827",
+    marginBottom: 20,
+  },
 
   // Forms
   formGroup: { marginBottom: 16 },
   label: { fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 },
-  input: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, color: "#111827" },
+  input: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#111827",
+  },
   textArea: { paddingVertical: 12, textAlignVertical: "top" },
 
   // Payment Options
-  paymentOption: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 12, padding: 16, marginBottom: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  paymentOption: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   paymentOptionSelected: { borderColor: "#10b981", backgroundColor: "#f0fdf4" },
   paymentOptionContent: { flexDirection: "row", alignItems: "center", flex: 1 },
   paymentOptionText: { marginLeft: 12, flex: 1 },
   paymentOptionTitle: { fontSize: 15, fontWeight: "600", color: "#111827" },
   paymentOptionDesc: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  inlineError: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#fffbeb", borderWidth: 1, borderColor: "#f59e0b", borderRadius: 10, padding: 12, marginBottom: 16 },
+  inlineError: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "#fffbeb",
+    borderWidth: 1,
+    borderColor: "#f59e0b",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+  },
   inlineErrorText: { flex: 1, fontSize: 13, color: "#92400e", lineHeight: 18 },
 
   // Network Options
-  networkOption: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#e5e7eb", borderRadius: 8, padding: 12, marginBottom: 8, flexDirection: "row", alignItems: "center" },
+  networkOption: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 8,
+    flexDirection: "row",
+    alignItems: "center",
+  },
   networkOptionSelected: { borderColor: "#10b981", backgroundColor: "#f0fdf4" },
-  networkName: { fontSize: 14, color: "#374151", marginLeft: 10, flex: 1, fontWeight: "500" },
+  networkName: {
+    fontSize: 14,
+    color: "#374151",
+    marginLeft: 10,
+    flex: 1,
+    fontWeight: "500",
+  },
   networkNameSelected: { color: "#10b981" },
 
   // Summary
-  summaryCard: { backgroundColor: "#fff", borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: "#e5e7eb" },
-  summaryTitle: { fontSize: 15, fontWeight: "bold", color: "#111827", marginBottom: 12 },
-  summaryItem: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
+  summaryCard: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#e5e7eb",
+  },
+  summaryTitle: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: "#111827",
+    marginBottom: 12,
+  },
+  summaryItem: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
   summaryItemName: { fontSize: 14, color: "#374151" },
   summaryItemPrice: { fontSize: 14, fontWeight: "600", color: "#10b981" },
   summaryDivider: { height: 1, backgroundColor: "#e5e7eb", marginVertical: 12 },
   summaryTotal: { flexDirection: "row", justifyContent: "space-between" },
   summaryTotalLabel: { fontSize: 15, fontWeight: "bold", color: "#111827" },
   summaryTotalValue: { fontSize: 18, fontWeight: "bold", color: "#10b981" },
-  summaryText: { fontSize: 14, color: "#374151", marginBottom: 6, lineHeight: 20 },
+  summaryText: {
+    fontSize: 14,
+    color: "#374151",
+    marginBottom: 6,
+    lineHeight: 20,
+  },
 
   // Buttons
   buttonRow: { flexDirection: "row", marginTop: 24, marginBottom: 32 },
-  button: { flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 12, borderRadius: 8, gap: 8 },
+  button: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
   primaryButton: { backgroundColor: "#10b981" },
-  secondaryButton: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#10b981", flex: 0.35 },
+  secondaryButton: {
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "#10b981",
+    flex: 0.35,
+  },
   buttonDisabled: { opacity: 0.6 },
   buttonText: { color: "#fff", fontSize: 15, fontWeight: "600" },
   buttonTextSecondary: { color: "#10b981", fontSize: 15, fontWeight: "600" },

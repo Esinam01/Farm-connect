@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from "react";
 import { supabase } from "./auth-store";
 
+// Set this to your deployed backend, e.g. via Expo env var:
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+
 export type AdminApprovalStatus =
   | "idle"
   | "unauthenticated"
@@ -8,6 +11,7 @@ export type AdminApprovalStatus =
   | "pending"
   | "approved"
   | "denied"
+  | "expired"
   | "error";
 
 type AdminApprovalState = {
@@ -51,31 +55,41 @@ function stopPolling() {
 async function checkApprovalStatus() {
   if (!state.requestId) return;
 
-  const { data, error } = await supabase
-    .from("admin_approval_requests")
-    .select("status")
-    .eq("id", state.requestId)
-    .single();
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/admin-access/status?requestId=${encodeURIComponent(
+        state.requestId
+      )}`
+    );
 
-  if (error || !data) {
-    // Keep polling silently; temporary network/read issues should not reset the flow.
-    return;
-  }
+    if (!response.ok) {
+      // Keep polling silently; temporary network/server issues should not reset the flow.
+      return;
+    }
 
-  if (data.status === "approved") {
-    setState({ status: "approved", approved: true, errorMessage: null });
-    stopPolling();
-    return;
-  }
+    const data = await response.json();
 
-  if (data.status === "denied") {
-    setState({ status: "denied", approved: false, errorMessage: "Approval request was denied." });
-    stopPolling();
-    return;
-  }
+    if (data.status === "approved") {
+      setState({ status: "approved", approved: true, errorMessage: null });
+      stopPolling();
+      return;
+    }
 
-  if (state.status !== "pending") {
-    setState({ status: "pending" });
+    if (data.status === "denied") {
+      setState({
+        status: "denied",
+        approved: false,
+        errorMessage: "Approval request was denied.",
+      });
+      stopPolling();
+      return;
+    }
+
+    if (state.status !== "pending") {
+      setState({ status: "pending" });
+    }
+  } catch {
+    // Network error mid-poll — stay silent and let the next interval retry.
   }
 }
 
@@ -112,48 +126,65 @@ export async function requestAdminApproval(): Promise<AdminApprovalRequestResult
     error: authError,
   } = await supabase.auth.getUser();
 
-  if (authError || !user) {
+  if (authError || !user?.email) {
     setState({
       status: "unauthenticated",
       approved: false,
       errorMessage: "You must be signed in to request admin access.",
     });
-    return { ok: false, message: "You must be signed in to request admin access." };
+    return {
+      ok: false,
+      message: "You must be signed in to request admin access.",
+    };
   }
 
-  const { data, error } = await supabase
-    .from("admin_approval_requests")
-    .insert({ status: "pending", source: "farmconnect-app", user_id: user.id })
-    .select("id, status")
-    .single();
-
-  if (error || !data) {
-    setState({
-      status: "error",
-      approved: false,
-      errorMessage: "Failed to create approval request.",
+  try {
+    const response = await fetch(`${API_BASE_URL}/admin-access/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ requesterEmail: user.email }),
     });
-    return { ok: false, message: "Failed to create approval request." };
-  }
 
-  const approvedNow = data.status === "approved";
+    const data = await response.json();
 
-  setState({
-    status: approvedNow ? "approved" : "pending",
-    approved: approvedNow,
-    requestId: data.id,
-    errorMessage: null,
-  });
+    if (!response.ok) {
+      // Surface the backend's specific reason (rate_limited, user_not_found, server_misconfigured, etc.)
+      const message = data?.message || "Failed to create approval request.";
+      setState({ status: "error", approved: false, errorMessage: message });
+      return { ok: false, message };
+    }
 
-  if (!approvedNow) {
+    if (data.status === "approved") {
+      setState({
+        status: "approved",
+        approved: true,
+        requestId: data.requestId,
+        errorMessage: null,
+      });
+      return { ok: true, message: data.message || "Already approved." };
+    }
+
+    setState({
+      status: "pending",
+      approved: false,
+      requestId: data.requestId,
+      errorMessage: null,
+    });
+
     startPolling();
     void checkApprovalStatus();
-  }
 
-  return {
-    ok: true,
-    message: approvedNow ? "Already approved." : "Approval request created. Awaiting admin approval.",
-  };
+    return {
+      ok: true,
+      message:
+        data.message || "Approval request created. Awaiting admin approval.",
+    };
+  } catch (err) {
+    const message =
+      "Could not reach the server. Check your connection and try again.";
+    setState({ status: "error", approved: false, errorMessage: message });
+    return { ok: false, message };
+  }
 }
 
 export function resetAdminApprovalState() {

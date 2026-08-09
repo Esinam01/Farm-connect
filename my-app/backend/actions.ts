@@ -17,6 +17,7 @@ type UserDetails = {
 
 export type Product = {
   id: string;
+  sellerId: string;
   image: string | null;
   featured: boolean;
   organic: boolean;
@@ -66,6 +67,7 @@ export async function FetchAllProducts(): Promise<Product[]> {
   const query = new URLSearchParams({
     select: [
       "id",
+      "seller_id",
       "name",
       "description",
       "price",
@@ -103,6 +105,7 @@ export async function FetchAllProducts(): Promise<Product[]> {
   return data.map(
     (row: any): Product => ({
       id: row.id,
+      sellerId: row.seller_id,
       name: row.name,
       description: row.description ?? null,
       price: parseFloat(row.price),
