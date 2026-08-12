@@ -1,8 +1,7 @@
-//
 /**
  * FarmAlertSystem.jsx
  * All-in-one farm security & intruder alert page.
- * Install: npx expo install expo-notifications expo-device expo-haptics
+ * Install: npx expo install expo-device expo-haptics
  */
 
 import { useState, useEffect, useRef } from "react";
@@ -13,65 +12,8 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import * as Notifications from "expo-notifications";
-import * as Device from "expo-device";
 
-// ─── Notification setup ───────────────────────────────────────────────────────
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
-
-async function registerPush() {
-  if (!Device.isDevice) return null;
-  try {
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    let final = existing;
-    if (existing !== "granted") {
-      const { status } = await Notifications.requestPermissionsAsync();
-      final = status;
-    }
-    if (final !== "granted") return null;
-    if (Platform.OS === "android") {
-      await Notifications.setNotificationChannelAsync("farm-alerts", {
-        name: "Farm Security Alerts",
-        importance: Notifications.AndroidImportance.MAX,
-        vibrationPattern: [0, 250, 250, 250],
-        lightColor: "#ef4444",
-        sound: true,
-      });
-    }
-    try {
-      const t = await Notifications.getExpoPushTokenAsync();
-      return t.data;
-    } catch (_) { return null; }
-  } catch (e) {
-    console.warn("Push registration skipped:", e.message);
-    return null;
-  }
-}
-
-async function fireLocalNotification(zone, severity, soundEnabled) {
-  try {
-    const emoji = { critical: "🚨", high: "⚠️", medium: "🔔", low: "📍" }[severity] ?? "🔔";
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: `${emoji} Intruder Alert — ${zone}`,
-        body: `${severity.toUpperCase()} threat detected. Tap to respond.`,
-        sound: soundEnabled,
-        channelId: "farm-alerts",
-        data: { zone, severity },
-      },
-      trigger: null,
-    });
-  } catch (e) {
-    console.warn("Local notification skipped:", e.message);
-  }
-}
+// ─── Backend Notification Setup ───────────────────────────────────────────────
 
 async function notifyBackend(zone, severity, token) {
   try {
@@ -137,36 +79,28 @@ const TABS = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  VIBRATION MANAGER
-//  We use setInterval to fire short single-shot vibrations ourselves.
-//  This way clearInterval() stops it INSTANTLY — no Android bugs.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const VibManager = {
   _interval: null,
 
-  // Start repeating vibration — fires a fresh single 400ms buzz every 900ms
   start(severity) {
-    this.stop(); // always clear previous first
+    this.stop();
     const duration = severity === "critical" ? 500 : 300;
     const gap      = severity === "critical" ? 900 : 1200;
 
-    // Fire immediately
     Vibration.vibrate(duration);
 
-    // Then keep firing on interval
     this._interval = setInterval(() => {
       Vibration.vibrate(duration);
     }, gap);
   },
 
-  // Stop instantly — clearInterval prevents the next scheduled vibrate
-  // and Vibration.cancel() stops any currently running one
   stop() {
     if (this._interval !== null) {
       clearInterval(this._interval);
       this._interval = null;
     }
-    // Stop the current buzz immediately
     Vibration.cancel();
   },
 
@@ -285,7 +219,6 @@ export default function FarmAlertSystem() {
   const [alerts,         setAlerts]         = useState(SEED_ALERTS);
   const [contacts,       setContacts]       = useState(DEFAULT_CONTACTS);
   const [alertFilter,    setAlertFilter]    = useState("all");
-  const [pushToken,      setPushToken]      = useState(null);
   const [alertsSilenced, setAlertsSilenced] = useState(false);
 
   const [callAlert,  setCallAlert]  = useState(null);
@@ -296,36 +229,16 @@ export default function FarmAlertSystem() {
   const [cName,      setCName]      = useState("");
   const [cNumber,    setCNumber]    = useState("");
 
-  const [soundOn,     setSoundOn]     = useState(true);
   const [vibOn,       setVibOn]       = useState(true);
-  const [pushOn,      setPushOn]      = useState(true);
   const [autoResolve, setAutoResolve] = useState(false);
-
-  const notifListener = useRef();
-  const respListener  = useRef();
 
   useEffect(() => {
     // Stop any vibration when screen opens
     VibManager.stop();
 
-    if (pushOn) registerPush().then(t => { if (t) setPushToken(t); });
-
-    notifListener.current = Notifications.addNotificationReceivedListener(n => {
-      const d = n.request.content.data;
-      if (d?.zone) injectAlert(d.zone, d.severity ?? "high", "sensor");
-    });
-    respListener.current = Notifications.addNotificationResponseReceivedListener(() => {
-      VibManager.stop();
-      setAlertsSilenced(true);
-      setTab("alerts");
-      setAlertFilter("active");
-    });
-
     return () => {
       // Always stop vibration when leaving the screen
       VibManager.stop();
-      notifListener.current?.remove?.();
-      respListener.current?.remove?.();
     };
   }, []);
 
@@ -339,27 +252,20 @@ export default function FarmAlertSystem() {
     };
     const a = { id: uid(), zone, severity, message: msgs[severity], timestamp: new Date().toISOString(), status: "active", source };
     setAlerts(prev => [a, ...prev]);
-    // Only show stop button for CRITICAL alerts or if user hasn't manually stopped
+    
     if (severity === "critical" || !alertsSilenced) {
       setAlertsSilenced(false);
       if (vibOn) VibManager.start(severity);
-      if (pushOn) fireLocalNotification(zone, severity, soundOn);
     } else {
-      // User has stopped alerts - don't restart vibration or sound for non-critical
       VibManager.stop();
     }
-    notifyBackend(zone, severity, pushToken);
+    notifyBackend(zone, severity, null);
   };
 
-  // ── STOP — instantly kills vibration via clearInterval ────────────────────
+  // ── STOP ───────────────────────────────────────────────────────────────────
   const handleStopAll = async () => {
-    VibManager.stop(); // This is instant — clearInterval + Vibration.cancel()
+    VibManager.stop();
     setAlertsSilenced(true);
-    try {
-      await Notifications.dismissAllNotificationsAsync();
-      await Notifications.cancelAllScheduledNotificationsAsync();
-    } catch (_) {}
-    // Mark all currently active alerts as dismissed to prevent re-triggering
     setAlerts(prev => prev.map(a => a.status === "active" ? { ...a, status: "dismissed" } : a));
   };
 
@@ -367,10 +273,9 @@ export default function FarmAlertSystem() {
   const doResolve = id =>
     Alert.alert("Resolve Alert", "Mark this alert as resolved?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Resolve", onPress: async () => {
+      { text: "Resolve", onPress: () => {
         VibManager.stop();
         setAlertsSilenced(true);
-        try { await Notifications.dismissAllNotificationsAsync(); } catch (_) {}
         setAlerts(p => p.map(a => a.id === id ? { ...a, status: "resolved" } : a));
       }},
     ]);
@@ -378,10 +283,9 @@ export default function FarmAlertSystem() {
   const doDismiss = id =>
     Alert.alert("Dismiss Alert", "Dismiss this alert?", [
       { text: "Cancel", style: "cancel" },
-      { text: "Dismiss", onPress: async () => {
+      { text: "Dismiss", onPress: () => {
         VibManager.stop();
         setAlertsSilenced(true);
-        try { await Notifications.dismissAllNotificationsAsync(); } catch (_) {}
         setAlerts(p => p.map(a => a.id === id ? { ...a, status: "dismissed" } : a));
       }},
     ]);
@@ -578,7 +482,7 @@ export default function FarmAlertSystem() {
           <Text style={styles.hardwareCardTitle}>Connect IoT Hardware</Text>
         </View>
         <Text style={styles.hardwareCardText}>
-          Use a <Text style={styles.hardwareBold}>PIR motion sensor</Text> (HC-SR501, ~$3) wired to an <Text style={styles.hardwareBold}>ESP32 or Arduino</Text> with WiFi. When motion is detected, the microcontroller sends a POST request to your backend which pushes the alert here.
+          Use a <Text style={styles.hardwareBold}>PIR motion sensor</Text> (HC-SR501, ~$3) wired to an <Text style={styles.hardwareBold}>ESP32 or Arduino</Text> with WiFi. When motion is detected, the microcontroller sends a POST request to your backend.
         </Text>
         <View style={styles.hardwareSteps}>
           {["Wire PIR sensor OUT pin → GPIO 13 on ESP32", "Flash the Arduino sketch from your notifyBackend comments", "Set your WiFi SSID, password, and backend URL in the sketch", "Power on the sensor — alerts will fire automatically"].map((step, i) => (
@@ -630,11 +534,9 @@ export default function FarmAlertSystem() {
 
   const renderSettings = () => (
     <ScrollView style={styles.tabBody} showsVerticalScrollIndicator={false}>
-      <Text style={styles.listSectionLabel}>Notifications</Text>
+      <Text style={styles.listSectionLabel}>Settings</Text>
       {[
-        { label: "Sound alerts",       sub: "Play sound when alert fires",               val: soundOn,     set: setSoundOn     },
         { label: "Vibration",          sub: "Vibrate device on new alert",               val: vibOn,       set: setVibOn       },
-        { label: "Push notifications", sub: "Receive alerts when app is closed",         val: pushOn,      set: setPushOn      },
         { label: "Auto-resolve low",   sub: "Automatically resolve low alerts after 1h", val: autoResolve, set: setAutoResolve },
       ].map(s => (
         <View key={s.label} style={styles.settingRow}>
@@ -645,13 +547,6 @@ export default function FarmAlertSystem() {
           <Switch value={s.val} onValueChange={v => { s.set(v); if (!v && s.label === "Vibration") VibManager.stop(); }} trackColor={{ false: "#e5e7eb", true: "#10b981" }} thumbColor="#fff" />
         </View>
       ))}
-      <Text style={[styles.listSectionLabel, { marginTop: 8 }]}>Push Token</Text>
-      <View style={styles.tokenCard}>
-        <Ionicons name="phone-portrait-outline" size={16} color="#6366f1" />
-        <Text style={styles.tokenCardText} numberOfLines={2}>
-          {pushToken ?? "Not registered — use a development build for remote push tokens."}
-        </Text>
-      </View>
       <Text style={[styles.listSectionLabel, { marginTop: 8 }]}>Backend Integration</Text>
       <View style={styles.hardwareCard}>
         <View style={styles.hardwareCardHeader}>
@@ -890,7 +785,6 @@ const styles = StyleSheet.create({
   tabBody:                { flex: 1, padding: 14 },
   pulseDot:               { width: 8, height: 8, borderRadius: 4 },
 
-  // Stop button
   stopWrapper:            { position: "absolute", bottom: 28, left: 20, right: 20, zIndex: 999, elevation: 20 },
   stopBtn:                { flexDirection: "row", alignItems: "center", justifyContent: "center", backgroundColor: "#b91c1c", paddingVertical: 18, borderRadius: 18, gap: 14,
                             shadowColor: "#b91c1c", shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 12, elevation: 16 },
@@ -976,8 +870,6 @@ const styles = StyleSheet.create({
   settingRow:             { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 8 },
   settingLabel:           { fontSize: 14, fontWeight: "600", color: "#111827" },
   settingSubLabel:        { fontSize: 12, color: "#9ca3af", marginTop: 2 },
-  tokenCard:              { flexDirection: "row", alignItems: "flex-start", gap: 8, backgroundColor: "#fff", borderRadius: 12, padding: 14, marginBottom: 8 },
-  tokenCardText:          { flex: 1, fontSize: 12, color: "#6b7280", lineHeight: 18 },
   listSectionLabel:       { fontSize: 11, fontWeight: "700", color: "#9ca3af", letterSpacing: 0.5, marginBottom: 8, marginTop: 4, textTransform: "uppercase" },
   modalOverlay:           { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalSheet:             { backgroundColor: "#fff", borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 8, maxHeight: "88%" },

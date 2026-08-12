@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, Link } from "expo-router";
 import { registerUser } from "../../lib/auth-store";
 import { CreateNewUser } from "@/backend/actions";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 export default function SignUpScreen() {
   const { role: initialRole } = useLocalSearchParams<{
@@ -114,11 +115,7 @@ export default function SignUpScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1 }}
-      >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <KeyboardAwareScrollView bottomOffset={20} contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <TouchableOpacity
               onPress={() => router.back()}
@@ -137,7 +134,7 @@ export default function SignUpScreen() {
             </View>
           </View>
 
-          <View style={styles.form}>
+          <KeyboardAwareScrollView style={styles.form}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Full Name</Text>
               <View
@@ -337,8 +334,8 @@ export default function SignUpScreen() {
                 </TouchableOpacity>
               </Link>
             </View>
-          </View>
-        </ScrollView>
+          </KeyboardAwareScrollView>
+        </KeyboardAwareScrollView>
 
         {toast && (
           <View
@@ -357,7 +354,6 @@ export default function SignUpScreen() {
             <Text style={styles.toastText}>{toast.message}</Text>
           </View>
         )}
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

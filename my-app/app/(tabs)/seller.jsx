@@ -23,13 +23,16 @@ import {
   updateMarketProduct,
   fetchSellerProducts,
 } from "../../lib/market-store";
-import { useUser, logout, supabase } from "../../lib/auth-store";
+import { getAuth, useUser, logout, supabase } from "../../lib/auth-store";
 import BottomNav from "../../components/BottomNav";
 import {
   useCategories,
   fetchCategories,
   fetchSellerStats,
 } from "../../lib/market-store";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
+import { useNotificationStore } from "../../lib/notificationStore";
+import NotificationsModal from "../../components/NotificationsModal";
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
 
@@ -214,7 +217,7 @@ function ProductDetailModal({ visible, onClose, product, onEdit, onDelete }) {
                 label="Category"
                 value={
                   product.category ??
-                  `ID ₵{product.category_id ?? product.categoryId}`
+                  `ID ${product.category_id ?? product.categoryId}`
                 }
               />
             </View>
@@ -269,11 +272,52 @@ function DetailRow({ icon, label, value }) {
 // ─── Product Form Modal ───────────────────────────────────────────────────────
 
 function ProductFormModal({ visible, onClose, onSave, editProduct }) {
+  const CLOUDINARY_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_NAME;
+  const CLOUDINARY_UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
+  const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`;
   const categories = useCategories();
   const [form, setForm] = useState(emptyForm());
   const [errors, setErrors] = useState({});
   const [imageError, setImageError] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
+
+  const uploadToCloudinary = async (localUri) => {
+    const filename = localUri.split("/").pop();
+    const match = /\.(\w+)$/.exec(filename ?? "");
+    const fileType = match ? match[1] : "jpg";
+
+    const formData = new FormData();
+
+    if (Platform.OS === "web") {
+      // Web needs a real Blob/File, not {uri, name, type}
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+      formData.append("file", blob, filename);
+    } else {
+      // iOS/Android accept this RN-specific shape
+      formData.append("file", {
+        uri: localUri,
+        name: filename,
+        type: `image/${fileType}`,
+      });
+    }
+
+    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+    const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await response.json();
+    console.log("Cloudinary response:", response.status);
+
+    if (!response.ok) {
+      throw new Error(data?.error?.message || "Cloudinary upload failed");
+    }
+
+    return data.secure_url;
+  };
 
   useEffect(() => {
     if (categories.length === 0) fetchCategories();
@@ -285,7 +329,11 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
         name: editProduct.name,
         price: String(editProduct.price),
         unit: editProduct.unit?.replace(/^\//, "") ?? "lb",
-        stock: String(editProduct.stock),
+        // Use the raw inventory count here, not editProduct.stock (which is
+        // the sold-adjusted "remaining" figure shown in the table) — otherwise
+        // saving without changing this field would shrink the seller's actual
+        // stock in the DB every time they edit the product.
+        stock: String(editProduct.rawStock ?? editProduct.stock),
         categoryId: editProduct.categoryId,
         description: editProduct.description || "",
         image: editProduct.image || "",
@@ -369,7 +417,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
       if (!permission.granted) {
         Alert.alert(
           "Permission Denied",
-          "We need access to your photo library to upload images."
+          "We need access to your photo library to upload images.",
         );
         return;
       }
@@ -382,16 +430,30 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
-        // Use the local URI directly — React Native Image supports local file URIs
-        set("image", result.assets[0].uri);
+        const localUri = result.assets[0].uri;
+        setUploadingImage(true);
         setImageError("");
+
+        try {
+          const cloudinaryUrl = await uploadToCloudinary(localUri);
+          set("image", cloudinaryUrl);
+        } catch (uploadErr) {
+          console.log("Cloudinary upload error:", uploadErr);
+          setImageError("Image upload failed. Please try again.");
+          Alert.alert(
+            "Upload Failed",
+            uploadErr instanceof Error ? uploadErr.message : String(uploadErr),
+          );
+        } finally {
+          setUploadingImage(false);
+        }
       }
     } catch (error) {
       setUploadingImage(false);
       Alert.alert(
         "Error",
         "Failed to pick image: " +
-          (error instanceof Error ? error.message : String(error))
+        (error instanceof Error ? error.message : String(error)),
       );
     }
   };
@@ -400,8 +462,9 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
     <Modal visible={visible} animationType="slide" transparent>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      // behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
+        {/* <KeyboardAwareScrollView bottomOffset={20}> */}
         <View style={styles.modalOverlay}>
           <View style={styles.modalSheet}>
             <View style={styles.modalHandle} />
@@ -414,7 +477,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
               </TouchableOpacity>
             </View>
 
-            <ScrollView
+            <KeyboardAwareScrollView
               style={styles.formScroll}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
@@ -435,6 +498,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
               </View>
 
               {/* Price + Unit */}
+              {/* Price + Unit */}
               <View style={styles.row}>
                 <View style={[styles.fieldGroup, { flex: 1.2 }]}>
                   <Text style={styles.fieldLabel}>Price (₵) *</Text>
@@ -451,7 +515,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
                   )}
                 </View>
                 <View style={[styles.fieldGroup, { flex: 1, marginLeft: 12 }]}>
-                  <Text style={styles.fieldLabel}>Unit</Text>
+                  <Text style={styles.fieldLabel}>Unit *</Text>
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -632,9 +696,10 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
               </TouchableOpacity>
 
               <View style={{ height: 32 }} />
-            </ScrollView>
+            </KeyboardAwareScrollView>
           </View>
         </View>
+        {/* </KeyboardAwareScrollView> */}
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -651,6 +716,9 @@ export default function SellerScreen() {
   const [detailProduct, setDetailProduct] = useState(null);
   const [detailVisible, setDetailVisible] = useState(false);
   const [avatarUri, setAvatarUri] = useState(null);
+  const { notifications, init } = useNotificationStore();
+  const [notificationsVisible, setNotificationsVisible] = useState(false);
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
 
   const openDetail = (product) => {
     setDetailProduct(product);
@@ -659,11 +727,11 @@ export default function SellerScreen() {
 
   const initials = user?.fullName
     ? user.fullName
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase()
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase()
     : "U";
 
   useEffect(() => {
@@ -675,7 +743,7 @@ export default function SellerScreen() {
   const loadProducts = async () => {
     if (!user) return;
     setLoading(true);
-    setProducts([]); // ← clear stale mock data immediately
+    setProducts([]);
 
     const [dbProducts, stats] = await Promise.all([
       fetchSellerProducts(user.id),
@@ -686,13 +754,25 @@ export default function SellerScreen() {
       setProducts(
         dbProducts.map((p) => ({
           ...p,
-          sold: stats[p.id]?.sold ?? 0,
-          revenue: stats[p.id]?.revenue ?? 0,
-        }))
+          sold: stats.productStats[p.id]?.sold ?? 0,
+          revenue: stats.productStats[p.id]?.revenue ?? 0,
+          // Keep the raw products.stock value around under a separate key.
+          // The edit form needs this (not the sold-adjusted number) so that
+          // saving without touching the stock field doesn't write the
+          // remaining count back to the DB as if it were the full inventory.
+          rawStock: p.stock ?? 0,
+          // stats.productStats[p.id].stock is already (raw stock - sold);
+          // this is what's shown in the table/totals as "current stock".
+          stock: stats.productStats[p.id]?.stock ?? p.stock ?? 0,
+        })),
       );
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+      if (user?.id) init(user.id);
+    }, [user?.id]);
 
   // Replace this with real alert count from your context/store later
   const activeAlerts = 2;
@@ -718,15 +798,18 @@ export default function SellerScreen() {
     try {
       if (editProduct) {
         await updateMarketProduct(editProduct.id, {
-          ...formData,
+          name: formData.name,
           price: parseFloat(formData.price),
           stock: parseInt(formData.stock),
-          unit: `/₵{formData.unit}`, // formData.unit comes from the form chips (no slash)
+          unit: `/${formData.unit}`,
+          categoryId: formData.categoryId,
+          description: formData.description,
+          image: formData.image,
         });
-        setProducts((prev) =>
-          prev.map((p) => (p.id === editProduct.id ? { ...p, ...formData } : p))
-        );
-        Alert.alert("Updated", `"₵{formData.name}" has been updated.`);
+
+        // Reload products so stats, categories, and images are in sync
+        await loadProducts();
+        Alert.alert("Updated", `"${formData.name}" has been updated.`);
       } else {
         await addMarketProduct(
           {
@@ -735,20 +818,19 @@ export default function SellerScreen() {
             stock: formData.stock,
             description: formData.description,
             price: parseFloat(formData.price),
-            unit: `/₵{formData.unit}`,
+            unit: `/${formData.unit}`,
             image: formData.image,
             featured: false,
             organic: true,
             categoryId: formData.categoryId,
           },
-          user.id
+          user.id,
         );
 
-        // Refresh products to get the new ID from DB
         await loadProducts();
         Alert.alert(
           "Added",
-          `"₵{formData.name}" has been added to your listings.`
+          `"${formData.name}" has been added to your listings.`,
         );
       }
     } catch (error) {
@@ -762,7 +844,7 @@ export default function SellerScreen() {
   const handleDelete = (product) => {
     Alert.alert(
       "Delete Product",
-      `Are you sure you want to delete "₵{product.name}"?`,
+      `Are you sure you want to delete "${product.name}"?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -777,7 +859,7 @@ export default function SellerScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -830,8 +912,16 @@ export default function SellerScreen() {
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.notificationButton}>
-            <Ionicons name="notifications-outline" size={22} color="#fff" />
+          <TouchableOpacity
+            style={styles.iconButton}
+            onPress={() => setNotificationsVisible(true)}
+          >
+            <Ionicons name="notifications-outline" size={22} color="#6b7280" />
+            {unreadCount > 0 && (
+              <View style={styles.iconBadge}>
+                <Text style={styles.iconBadgeText}>{unreadCount}</Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <View style={styles.userInfoRow}>
@@ -1134,6 +1224,11 @@ export default function SellerScreen() {
         onDelete={handleDelete}
       />
 
+      <NotificationsModal
+        visible={notificationsVisible}
+        onClose={() => setNotificationsVisible(false)}
+      />
+
       <ProductFormModal
         visible={modalVisible}
         onClose={() => {
@@ -1227,6 +1322,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  iconButton: { padding: 8, position: "relative" },
+  iconBadge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    backgroundColor: "#ef4444",
+    borderRadius: 10,
+    width: 16,
+    height: 16,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 3,
+  },
+  iconBadgeText: { color: "#fff", fontSize: 9, fontWeight: "bold" },
 
   // Alert icon in header
   alertIconBtn: { position: "relative", padding: 8 },

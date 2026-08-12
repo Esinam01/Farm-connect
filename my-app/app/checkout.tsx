@@ -13,21 +13,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import Constants from "expo-constants";
-import * as Notifications from "expo-notifications";
 import { getAuthState } from "@/lib/auth-store";
 import { useNotificationStore } from "../lib/notificationStore";
 import {showAlert} from "../lib/alert";
 import { useCartStore } from "@/lib/cart-store";
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+import React from "react";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 const PAYMENT_NETWORKS = [
   {
@@ -162,7 +153,7 @@ export default function CheckoutScreen() {
   }, [params.cart]);
 
   useEffect(() => {
-    Notifications.requestPermissionsAsync().catch(() => null);
+    // Notifications.requestPermissionsAsync().catch(() => null);
   }, []);
 
   const totalAmount = cart.reduce(
@@ -180,16 +171,16 @@ export default function CheckoutScreen() {
     }
 
     paymentReminderSentForOrder.current = orderId;
-    Notifications.scheduleNotificationAsync({
-      content: {
-        title: "Complete your payment",
-        body: `Your FarmConnect order total is GHS ${totalAmount.toFixed(
-          2
-        )}. Tap to finish payment.`,
-        data: { orderId },
-      },
-      trigger: null,
-    }).catch(() => null);
+    // Notifications.scheduleNotificationAsync({
+    //   content: {
+    //     title: "Complete your payment",
+    //     body: `Your FarmConnect order total is GHS ${totalAmount.toFixed(
+    //       2
+    //     )}. Tap to finish payment.`,
+    //     data: { orderId },
+    //   },
+    //   trigger: null,
+    // }).catch(() => null);
   }, [currentStep, orderId, totalAmount]);
 
   // Validate buyer details
@@ -427,7 +418,7 @@ export default function CheckoutScreen() {
 
   // Render step 1: Buyer details
   const renderBuyerDetails = () => (
-    <View style={styles.stepContainer}>
+    <KeyboardAwareScrollView style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Delivery Information</Text>
 
       <View style={styles.formGroup}>
@@ -509,12 +500,12 @@ export default function CheckoutScreen() {
           </>
         )}
       </TouchableOpacity>
-    </View>
+    </KeyboardAwareScrollView>
   );
 
   // Render step 2: Payment method selection
   const renderPaymentMethod = () => (
-    <View style={styles.stepContainer}>
+    <KeyboardAwareScrollView style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Select Payment Method</Text>
 
       {orderCreationError ? (
@@ -665,12 +656,12 @@ export default function CheckoutScreen() {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAwareScrollView>
   );
 
   // Render step 3: Payment confirmation
   const renderPaymentConfirmation = () => (
-    <View style={styles.stepContainer}>
+    <KeyboardAwareScrollView style={styles.stepContainer}>
       <Text style={styles.stepTitle}>Confirm Payment</Text>
 
       {/* Order Summary */}
@@ -746,7 +737,7 @@ export default function CheckoutScreen() {
           )}
         </TouchableOpacity>
       </View>
-    </View>
+    </KeyboardAwareScrollView>
   );
 
   return (

@@ -1,5 +1,8 @@
 import { useSyncExternalStore } from "react";
-import { supabase } from "./auth-store";
+import { getAuthState, supabase } from "./auth-store";
+import { useNotificationStore } from "./notificationStore";
+
+const notifiedLowStockProductIds = new Set<string>();
 
 export type MarketProduct = {
   id: string;
@@ -226,7 +229,7 @@ export function useMarketProducts() {
   return useSyncExternalStore(
     subscribe,
     () => state.products,
-    () => state.products
+    () => state.products,
   );
 }
 
@@ -254,14 +257,14 @@ export function useCategories() {
   return useSyncExternalStore(
     subscribe,
     () => state.categories,
-    () => state.categories
+    () => state.categories,
   );
 }
 
 export async function fetchProducts() {
   if (!supabase) {
     console.warn(
-      "Market Store: Supabase is not configured. Cannot fetch products."
+      "Market Store: Supabase is not configured. Cannot fetch products.",
     );
     return;
   }
@@ -307,7 +310,7 @@ export async function fetchProducts() {
 export async function fetchSellerProducts(sellerId: string) {
   if (!supabase) {
     console.warn(
-      "Market Store: Supabase is not configured. Cannot fetch seller products."
+      "Market Store: Supabase is not configured. Cannot fetch seller products.",
     );
     return [];
   }
@@ -316,6 +319,7 @@ export async function fetchSellerProducts(sellerId: string) {
       .from("products")
       .select("*, categories(name), sellers(farm_name, farm_location)")
       .eq("seller_id", sellerId)
+      .gt("stock", 0) // exclude out-of-stock products from results
       .order("created_at", { ascending: false });
 
     if (error) throw error;
@@ -337,8 +341,26 @@ export async function fetchSellerProducts(sellerId: string) {
         categoryId: item.category_id,
       }));
 
-      // We don't replace the whole market state here,
-      // but return the products for the component to use.
+      const { user } = getAuthState();
+
+      dbProducts.forEach((product: MarketProduct) => {
+        const isLow = product.stock <= 10;
+        const alreadyNotified = notifiedLowStockProductIds.has(product.id);
+
+        if (isLow && user?.id === sellerId && !alreadyNotified) {
+          useNotificationStore.getState().notify({
+            title: "Low Stock Alert",
+            message: `The product "${product.name}" is running low on stock. Only ${product.stock} left!`,
+            type: "warning",
+          });
+          notifiedLowStockProductIds.add(product.id);
+        } else if (!isLow) {
+          // Stock recovered above threshold — allow a fresh alert
+          // if it dips low again later.
+          notifiedLowStockProductIds.delete(product.id);
+        }
+      });
+
       return dbProducts;
     }
     return [];
@@ -348,41 +370,91 @@ export async function fetchSellerProducts(sellerId: string) {
   }
 }
 
-export async function fetchSellerStats(
-  sellerId: string
-): Promise<Record<string, { sold: number; revenue: number }>> {
-  const { data, error } = await supabase
-    .from("order_items")
-    .select("product_id, quantity, subtotal")
-    .eq("seller_id", sellerId);
+export async function fetchSellerStats(sellerId: string): Promise<{
+  productStats: Record<
+    string,
+    { sold: number; revenue: number; stock: number }
+  >;
+  totalStock: number;
+  totalSold: number;
+  totalRevenue: number;
+}> {
+  // Fetch both order items (sales/revenue) and products (stock) in parallel
+  const [orderItemsRes, productsRes] = await Promise.all([
+    supabase
+      .from("order_items")
+      .select("product_id, quantity, subtotal")
+      .eq("seller_id", sellerId),
+    supabase.from("products").select("id, stock").eq("seller_id", sellerId),
+  ]);
 
-  if (error || !data) return {};
+  const productStats: Record<
+    string,
+    { sold: number; revenue: number; stock: number }
+  > = {};
+  let totalSold = 0;
+  let totalRevenue = 0;
 
-  const stats: Record<string, { sold: number; revenue: number }> = {};
-  for (const item of data) {
-    if (!stats[item.product_id])
-      stats[item.product_id] = { sold: 0, revenue: 0 };
-    stats[item.product_id].sold += item.quantity;
-    stats[item.product_id].revenue += parseFloat(item.subtotal);
+  // Seed with the raw inventory count from the products table. This is the
+  // quantity the seller originally stocked, NOT what's currently left —
+  // we still need to subtract what's been sold (below).
+  if (productsRes.data) {
+    for (const product of productsRes.data) {
+      const stockNum = product.stock ?? 0;
+      productStats[product.id] = { sold: 0, revenue: 0, stock: stockNum };
+    }
   }
-  return stats;
+
+  // Aggregate sold quantity and revenue from order items
+  if (orderItemsRes.data) {
+    for (const item of orderItemsRes.data) {
+      if (!productStats[item.product_id]) {
+        productStats[item.product_id] = { sold: 0, revenue: 0, stock: 0 };
+      }
+      const itemSold = item.quantity ?? 0;
+      const itemRevenue = parseFloat(item.subtotal || "0");
+
+      productStats[item.product_id].sold += itemSold;
+      productStats[item.product_id].revenue += itemRevenue;
+
+      totalSold += itemSold;
+      totalRevenue += itemRevenue;
+    }
+  }
+
+  // Convert raw inventory into remaining stock (raw - sold), floored at 0
+  // so a product doesn't show negative stock if sold count ever outpaces
+  // the recorded inventory (e.g. stock was lowered manually after a sale).
+  let totalStock = 0;
+  for (const productId in productStats) {
+    const entry = productStats[productId];
+    entry.stock = Math.max(0, entry.stock - entry.sold);
+    totalStock += entry.stock;
+  }
+
+  return {
+    productStats,
+    totalStock,
+    totalSold,
+    totalRevenue,
+  };
 }
 
 export function useBuyerSignedUp() {
   return useSyncExternalStore(
     subscribe,
     () => state.buyerSignedUp,
-    () => state.buyerSignedUp
+    () => state.buyerSignedUp,
   );
 }
 
 export async function addMarketProduct(
   product: Omit<MarketProduct, "id" | "category" | "farm">,
-  sellerId: string
+  sellerId: string,
 ) {
   if (!supabase) {
     throw new Error(
-      "Supabase is not configured. Please add your real URL and API Key to your .env file."
+      "Supabase is not configured. Please add your real URL and API Key to your .env file.",
     );
   }
   try {
@@ -442,11 +514,11 @@ export async function addMarketProduct(
 export async function updateMarketProduct(id: string, patch: MarketPatch) {
   if (!supabase) {
     throw new Error(
-      "Supabase is not configured. Please add your real URL and API Key to your .env file."
+      "Supabase is not configured. Please add your real URL and API Key to your .env file.",
     );
   }
   try {
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("products")
       .update({
         name: patch.name,
@@ -459,17 +531,35 @@ export async function updateMarketProduct(id: string, patch: MarketPatch) {
         is_organic: patch.organic,
         is_featured: patch.featured,
       })
-      .eq("id", id);
+      .eq("id", id)
+      .select("*, categories(name), sellers(farm_name, farm_location)")
+      .single();
 
     if (error) throw error;
 
-    state = {
-      ...state,
-      products: state.products.map((product) =>
-        product.id === id ? { ...product, ...patch } : product
-      ),
-    };
-    emit();
+    if (data) {
+      const updatedProduct: MarketProduct = {
+        id: data.id,
+        name: data.name,
+        rating: Number(data.rating) || 0,
+        stock: data.stock || 0,
+        description: data.description || "",
+        farm: data.sellers?.farm_name || "Unknown Farm",
+        price: Number(data.price),
+        unit: data.unit,
+        image: data.image_url || "",
+        featured: data.is_featured || false,
+        organic: data.is_organic || false,
+        category: data.categories?.name || "Uncategorized",
+        categoryId: data.category_id,
+      };
+
+      state = {
+        ...state,
+        products: state.products.map((p) => (p.id === id ? updatedProduct : p)),
+      };
+      emit();
+    }
   } catch (error) {
     console.error("Error updating product:", error);
     throw error;
@@ -479,7 +569,7 @@ export async function updateMarketProduct(id: string, patch: MarketPatch) {
 export async function deleteMarketProduct(id: string) {
   if (!supabase) {
     throw new Error(
-      "Supabase is not configured. Please add your real URL and API Key to your .env file."
+      "Supabase is not configured. Please add your real URL and API Key to your .env file.",
     );
   }
   try {
@@ -523,7 +613,7 @@ export async function placeOrder(
     sellerId: string;
     productName: string;
   }[],
-  total: number
+  total: number,
 ): Promise<Order | undefined> {
   if (!supabase) return undefined;
 
@@ -598,7 +688,7 @@ export async function fetchBuyerOrders(buyerId: string): Promise<Order[]> {
           *,
           products (name)
         )
-      `
+      `,
       )
       .eq("buyer_id", buyerId)
       .order("created_at", { ascending: false });

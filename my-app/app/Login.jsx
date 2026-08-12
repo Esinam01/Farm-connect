@@ -15,6 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, Link, Stack } from "expo-router";
 import { loginUser, mockLogin } from "../lib/auth-store";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 export default function LoginScreen() {
   const [email, setEmail] = useState("");
@@ -42,6 +43,11 @@ export default function LoginScreen() {
     }
   };
 
+  const handleForgotPassword = () => 
+  {
+    
+  }
+
   const handleMockLogin = async (role) => {
     try {
       setLoading(true);
@@ -61,7 +67,7 @@ export default function LoginScreen() {
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <KeyboardAwareScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
             <TouchableOpacity onPress={() => router.push("/")} style={styles.backButton}>
               <Ionicons name="arrow-back" size={24} color="#0f9d58" />
@@ -110,7 +116,7 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            <TouchableOpacity style={styles.forgotPassword}>
+            <TouchableOpacity style={styles.forgotPassword} onPress={handleForgotPassword}>
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
 
@@ -153,7 +159,7 @@ export default function LoginScreen() {
               </View>
             </View>
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
