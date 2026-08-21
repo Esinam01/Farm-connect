@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { subscribe as subscribeToAuth, getAuthState } from "../lib/auth-store";
+import {showAlert} from "../lib/alert";
 
 const storageKey = (userId) =>
   userId ? `cart-storage-${userId}` : "cart-storage-guest";
@@ -57,7 +58,22 @@ export const useCartStore = create((set, get) => ({
       ...product,
       sellerId: product.sellerId ?? product.seller_id,
     };
+    
+    if(product.sellerId ?? product.seller_id === user?.id){
+      showAlert("You cannot add your own product to the cart.");
+      return;
+    }
+
+    const maxStock = normalized.stock ?? normalized.quantity ?? normalized.countInStock;
     const existing = cart.find((i) => i.id === normalized.id);
+    const currentQty = existing ? existing.qty : 0;
+
+    // Prevent adding if stock limit is reached
+    if (maxStock !== undefined && currentQty >= maxStock) {
+      showAlert(`Cannot add more than the available quantity (${maxStock}).`);
+      return;
+    }
+
     const newCart = existing
       ? cart.map((i) => (i.id === normalized.id ? { ...i, qty: i.qty + 1 } : i))
       : [...cart, { ...normalized, qty: 1 }];

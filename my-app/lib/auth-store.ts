@@ -10,6 +10,8 @@ const SUPABASE_ANON_KEY =
   process.env.SUPABASE_ANON_KEY ||
   "";
 
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn("Supabase credentials not detected in process.env");
 }
@@ -611,6 +613,15 @@ export function initAuth() {
       handleAuthState(session);
     }
   );
+}
+
+export async function requestPasswordReset(email: string) {
+  const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  return res.json(); // { ok: true, message: "..." }
 }
 
 // Auto-init on load

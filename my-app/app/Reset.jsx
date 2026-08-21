@@ -14,50 +14,35 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, Link, Stack } from "expo-router";
-import { loginUser, mockLogin } from "../lib/auth-store";
+import { requestPasswordReset, loginUser, mockLogin } from "../lib/auth-store";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
-export default function LoginScreen() {
+export default function ResetScreen() {
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
+  const handlePasswordReset = async () => {
+    if (!email) {
       Alert.alert("Error", "Please fill in all fields");
       return;
     }
 
     setLoading(true);
     try {
-      // We default to 'buyer' for generic login, roles are handled in store
-      await loginUser(email, password, "buyer");
-      console.log("Login successful, navigating to home...");
-      router.replace("/");
+      const result = await requestPasswordReset(email);
+      Alert.alert("Check your email", result.message, [
+        { text: "OK", onPress: () => router.push("/Login") },
+      ]);
     } catch (error) {
-      console.error("Login component error:", error);
-      Alert.alert("Login Failed", error instanceof Error ? error.message : "Invalid credentials");
+      console.error("Password reset error:", error);
+      Alert.alert("Something went wrong", "Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleForgotPassword = () => 
-  {
-    router.push("/Reset");
-  }
-
-  const handleMockLogin = async (role) => {
-    try {
-      setLoading(true);
-      await mockLogin(role);
-      router.replace("/");
-    } catch (error) {
-      Alert.alert("Mock Login Failed", error.message);
-    } finally {
-      setLoading(false);
-    }
+  const Login = () => {
+    router.push("/Login");
   };
 
   return (
@@ -69,15 +54,20 @@ export default function LoginScreen() {
       >
         <KeyboardAwareScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.header}>
-            <TouchableOpacity onPress={() => router.push("/")} style={styles.backButton}>
+            <TouchableOpacity
+              onPress={() => router.push("/Login")}
+              style={styles.backButton}
+            >
               <Ionicons name="arrow-back" size={24} color="#0f9d58" />
             </TouchableOpacity>
             <View style={styles.logoContainer}>
               <View style={styles.logoCircle}>
                 <Ionicons name="leaf" size={40} color="#fff" />
               </View>
-              <Text style={styles.title}>Welcome Back</Text>
-              <Text style={styles.subtitle}>Sign in to continue to FarmConnect</Text>
+              <Text style={styles.title}>Password Reset</Text>
+              <Text style={styles.subtitle}>
+                Enter your email to reset your password
+              </Text>
             </View>
           </View>
 
@@ -85,7 +75,12 @@ export default function LoginScreen() {
             <View style={styles.inputContainer}>
               <Text style={styles.label}>Email Address</Text>
               <View style={styles.inputWrapper}>
-                <Ionicons name="mail-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
+                <Ionicons
+                  name="mail-outline"
+                  size={20}
+                  color="#94a3b8"
+                  style={styles.inputIcon}
+                />
                 <TextInput
                   style={styles.input}
                   placeholder="your@email.com"
@@ -98,65 +93,25 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="lock-closed-outline" size={20} color="#94a3b8" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="••••••••"
-                  placeholderTextColor="#94a3b8"
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeIcon}>
-                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color="#94a3b8" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <TouchableOpacity style={styles.forgotPassword} onPress={handleForgotPassword}>
-              <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-            </TouchableOpacity>
-
             <TouchableOpacity
               style={[styles.loginButton, loading && styles.disabledButton]}
-              onPress={handleLogin}
+              onPress={handlePasswordReset}
               disabled={loading}
             >
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.loginButtonText}>Sign In</Text>
+                <Text style={styles.loginButtonText}>Send</Text>
               )}
             </TouchableOpacity>
 
             <View style={styles.footer}>
-              <Text style={styles.footerText}>Don't have an account? </Text>
-              <Link href="/signup" asChild>
-                <TouchableOpacity>
-                  <Text style={styles.signupText}>Sign Up</Text>
-                </TouchableOpacity>
-              </Link>
-            </View>
-
-            <View style={styles.devBypass}>
-              <Text style={styles.devBypassText}>Development Bypass:</Text>
-              <View style={styles.devBypassButtons}>
-                <TouchableOpacity 
-                  style={[styles.mockButton, { backgroundColor: "#3b82f6" }]} 
-                  onPress={() => handleMockLogin("buyer")}
-                >
-                  <Text style={styles.mockButtonText}>Mock Buyer</Text>
-                </TouchableOpacity>
-                <TouchableOpacity 
-                  style={[styles.mockButton, { backgroundColor: "#8b5cf6" }]} 
-                  onPress={() => handleMockLogin("seller")}
-                >
-                  <Text style={styles.mockButtonText}>Mock Seller</Text>
-                </TouchableOpacity>
-              </View>
+              <Text style={styles.footerText}>
+                Remembered your account credentials?{" "}
+              </Text>
+              <TouchableOpacity onPress={Login}>
+                <Text style={styles.signupText}>Login</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </KeyboardAwareScrollView>
@@ -330,4 +285,3 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 });
-

@@ -309,6 +309,24 @@ create policy "Authenticated users can insert notifications"
   with check (auth.role() = 'authenticated');
 
 -- ============================================================================
+-- 14. PASSWORD RESETS
+-- ============================================================================
+
+create table if not exists password_reset_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references auth.users(id) on delete cascade,
+  token text unique not null,
+  status text not null default 'pending', -- pending | used | expired
+  expires_at timestamptz not null,
+  created_at timestamptz not null default now(),
+  used_at timestamptz,
+  client_ip text
+);
+
+create index if not exists idx_password_reset_token on password_reset_requests(token);
+alter table password_reset_requests enable row level security;
+
+-- ============================================================================
 -- ROW LEVEL SECURITY (RLS) POLICIES
 -- ============================================================================
 

@@ -140,21 +140,25 @@ export async function FetchAllProducts(): Promise<Product[]> {
 
   const data = await productsResponse.json();
 
-  return data.map(
-    (row: any): Product => {
-      const rawStock = row.stock ?? 0;
-      const sold = soldByProduct[row.id] ?? 0;
+  return data.flatMap((row: any): Product[] => {
+    const rawStock = row.stock ?? 0;
+    const sold = soldByProduct[row.id] ?? 0;
+    const remainingStock = Math.max(0, rawStock - sold);
 
-      return {
+    // Exclude out-of-stock items
+    if (remainingStock <= 0) {
+      return [];
+    }
+
+    return [
+      {
         id: row.id,
         sellerId: row.seller_id,
         name: row.name,
         description: row.description ?? null,
         price: parseFloat(row.price),
         unit: row.unit,
-        // Remaining stock = what the seller stocked minus what's sold,
-        // floored at 0 so a product never shows negative stock.
-        stock: Math.max(0, rawStock - sold),
+        stock: remainingStock,
         image: row.image_url ? { uri: row.image_url } : PLACEHOLDER_IMAGE,
         organic: row.is_organic,
         featured: row.is_featured,
@@ -162,7 +166,7 @@ export async function FetchAllProducts(): Promise<Product[]> {
         farm: row.sellers?.farm_location ?? row.sellers?.farm_name ?? null,
         category: row.categories?.name ?? null,
         quantity: null,
-      };
-    }
-  );
+      },
+    ];
+  });
 }
