@@ -30,7 +30,7 @@ export const supabase =
 
 console.log(
   "Auth Store Initialized. Supabase Client:",
-  supabase ? "READY" : "MISSING CREDENTIALS"
+  supabase ? "READY" : "MISSING CREDENTIALS",
 );
 
 export type User = {
@@ -124,15 +124,22 @@ export async function refreshUser(): Promise<User | null> {
   const updatedUser: User = {
     id: session.user.id,
     email: session.user.email || "",
-    fullName: profile?.full_name || session.user.user_metadata?.full_name || "User",
+    fullName:
+      profile?.full_name || session.user.user_metadata?.full_name || "User",
     role: profile?.role || session.user.user_metadata?.role || "buyer",
     createdAt: new Date(session.user.created_at).getTime(),
-    avatarUri: profile?.avatar_url ?? session.user.user_metadata?.avatar_url ?? null,
+    avatarUri:
+      profile?.avatar_url ?? session.user.user_metadata?.avatar_url ?? null,
     phone: profile?.phone ?? session.user.user_metadata?.phone ?? "",
     address: profile?.address ?? session.user.user_metadata?.address ?? "",
   };
 
-  state = { ...state, user: updatedUser, currentRole: updatedUser.role, isLoggedIn: true };
+  state = {
+    ...state,
+    user: updatedUser,
+    currentRole: updatedUser.role,
+    isLoggedIn: true,
+  };
   emit();
   return updatedUser;
 }
@@ -150,7 +157,7 @@ export function useUser() {
   return useSyncExternalStore(
     subscribe,
     () => state.user,
-    () => state.user
+    () => state.user,
   );
 }
 
@@ -158,7 +165,7 @@ export function useIsLoggedIn() {
   return useSyncExternalStore(
     subscribe,
     () => state.isLoggedIn,
-    () => state.isLoggedIn
+    () => state.isLoggedIn,
   );
 }
 
@@ -166,7 +173,7 @@ export function useCurrentRole() {
   return useSyncExternalStore(
     subscribe,
     () => state.currentRole,
-    () => state.currentRole
+    () => state.currentRole,
   );
 }
 
@@ -174,7 +181,7 @@ export function useAuthLoading() {
   return useSyncExternalStore(
     subscribe,
     () => state.loading,
-    () => state.loading
+    () => state.loading,
   );
 }
 
@@ -182,7 +189,7 @@ export function useAuthInitialized() {
   return useSyncExternalStore(
     subscribe,
     () => state.initialized,
-    () => state.initialized
+    () => state.initialized,
   );
 }
 
@@ -191,7 +198,7 @@ export const useAuthStore = {
     useSyncExternalStore(
       subscribe,
       () => state,
-      () => state
+      () => state,
     ),
 };
 
@@ -202,13 +209,13 @@ export async function registerUser(
   email: string,
   fullName: string,
   password: string,
-  role: "buyer" | "seller"
+  role: "buyer" | "seller",
 ): Promise<User> {
   console.log("Attempting to register user:", email, role);
 
   if (!supabase) {
     throw new Error(
-      "Supabase is not configured. Please add your real URL and API Key to your .env file."
+      "Supabase is not configured. Please add your real URL and API Key to your .env file.",
     );
   }
 
@@ -216,79 +223,132 @@ export async function registerUser(
   emit();
 
   try {
-    // Register user with Supabase Auth
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role,
-        },
-      },
-    });
+    // Check if a profile already exists for this email (e.g. buyer upgrading to seller)
+    const { data: existingProfile, error: existingProfileError } =
+      await supabase
+        .from("user_profiles")
+        .select("id, role, full_name")
+        .eq("email", email)
+        .maybeSingle();
 
-    if (error) {
-      console.error("Signup Error (signUp):", error.message);
-      throw error;
-    }
-    if (!data.user) throw new Error("Registration failed");
-
-    console.log(
-      "Signup successful, ensuring profile exists for ID:",
-      data.user.id
-    );
-
-    // 2. Ensure the profile exists in the public.user_profiles table
-    // We try calling an RPC first if you've enabled it in Supabase,
-    // otherwise fallback to a direct insert with 'onConflict' logic handled by the trigger
-    const { error: profileError } = await supabase.rpc(
-      "create_profile_for_user",
-      {
-        user_id: data.user.id,
-        user_email: email,
-        user_full_name: fullName,
-        user_role: role,
-      }
-    );
-
-    if (profileError) {
+    if (existingProfileError) {
       console.warn(
-        "RPC profile creation failed (might be because trigger handled it):",
-        profileError.message
+        "Error checking existing profile:",
+        existingProfileError.message,
+      );
+    }
+
+    let userId: string;
+    let resolvedFullName = fullName;
+
+    if (
+      existingProfile &&
+      existingProfile.role === "buyer" &&
+      role === "seller"
+    ) {
+      // Existing buyer wants to become a seller too.
+      // Don't call signUp (email already exists) — verify it's really them instead.
+      console.log("Existing buyer upgrading to seller, verifying password...");
+
+      const { data: signInData, error: signInError } =
+        await supabase.auth.signInWithPassword({ email, password });
+
+      if (signInError || !signInData.user) {
+        console.error("Password verification failed:", signInError?.message);
+        throw new Error("Incorrect password for existing account.");
+      }
+
+      userId = signInData.user.id;
+      resolvedFullName = existingProfile.full_name || fullName;
+
+      const { error: updateError } = await supabase
+        .from("user_profiles")
+        .update({ role: "seller" })
+        .eq("id", userId);
+
+      if (updateError) {
+        console.error(
+          "Failed to update profile role to seller:",
+          updateError.message,
+        );
+        throw updateError;
+      }
+
+      const { error: metaError } = await supabase.auth.updateUser({
+        data: { role: "seller" },
+      });
+      if (metaError) {
+        console.error(
+          "Failed to sync role to auth metadata:",
+          metaError.message,
+        );
+      }
+
+      await refreshUser();
+    } else {
+      // Fresh registration — normal signUp flow
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName, role },
+        },
+      });
+
+      if (error) {
+        console.error("Signup Error (signUp):", error.message);
+        throw error;
+      }
+      if (!data.user) throw new Error("Registration failed");
+
+      userId = data.user.id;
+
+      console.log("Signup successful, ensuring profile exists for ID:", userId);
+
+      const { error: profileError } = await supabase.rpc(
+        "create_profile_for_user",
+        {
+          user_id: userId,
+          user_email: email,
+          user_full_name: fullName,
+          user_role: role,
+        },
       );
 
-      // Fallback: Direct insert if RPC is not available
-      const { error: insertError } = await supabase
-        .from("user_profiles")
-        .insert([{ id: data.user.id, email, full_name: fullName, role }])
-        .select();
-
-      if (insertError && !insertError.message.includes("already exists")) {
-        console.error(
-          "Manual profile insertion also failed:",
-          insertError.message
+      if (profileError) {
+        console.warn(
+          "RPC profile creation failed (might be because trigger handled it):",
+          profileError.message,
         );
+
+        const { error: insertError } = await supabase
+          .from("user_profiles")
+          .insert([{ id: userId, email, full_name: fullName, role }])
+          .select();
+
+        if (insertError && !insertError.message.includes("already exists")) {
+          console.error(
+            "Manual profile insertion also failed:",
+            insertError.message,
+          );
+        }
       }
     }
 
     if (role === "seller") {
       const { error: sellerError } = await supabase
         .from("sellers")
-        .insert([{ id: data.user.id, farm_name: fullName }]);
+        .insert([{ id: userId, farm_name: resolvedFullName }]);
 
       if (sellerError && !sellerError.message.includes("duplicate")) {
-        console.error(
-          "Failed to create seller profile:",
-          sellerError.message
-        );
+        console.error("Failed to create seller profile:", sellerError.message);
       }
     }
 
     const user: User = {
-      id: data.user.id,
-      email: data.user.email || email,
-      fullName,
+      id: userId,
+      email,
+      fullName: resolvedFullName,
       role,
       createdAt: Date.now(),
       avatarUri: null,
@@ -296,9 +356,7 @@ export async function registerUser(
       address: "",
     };
 
-    // console.log("Final Registered User Object:", user);
     state = { ...state, loading: false };
-
     emit();
 
     return user;
@@ -316,7 +374,7 @@ export async function registerUser(
 export async function loginUser(
   email: string,
   password: string,
-  expectedRole: "buyer" | "seller"
+  expectedRole: "buyer" | "seller",
 ): Promise<User> {
   state = { ...state, loading: true };
   emit();
@@ -359,7 +417,13 @@ export async function loginUser(
       address: profile?.address || data.user.user_metadata?.address || "",
     };
 
-    state = { ...state, loading: false };
+    state = {
+      ...state,
+      user,
+      currentRole: user.role,
+      isLoggedIn: true,
+      loading: false,
+    };
     emit();
 
     return user;
@@ -469,7 +533,10 @@ export async function updateCurrentUserProfile(updates: {
 /**
  * Update user password
  */
-export async function updateCurrentUserPassword(currentPassword: string, newPassword: string) {
+export async function updateCurrentUserPassword(
+  currentPassword: string,
+  newPassword: string,
+) {
   // Re-authenticate with current password first
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: state.user!.email,
@@ -506,7 +573,6 @@ export async function logout() {
 }
 // No longer using mock admin login
 
-
 //Delete user account
 export async function deleteAccount() {
   const userId = state.user?.id;
@@ -532,7 +598,6 @@ export async function deleteAccount() {
 
   await supabase.auth.signOut({ scope: "local" });
 }
-
 
 /**
  * Mock login for development bypass (when Supabase rate limits are hit)
@@ -586,7 +651,7 @@ export function initAuth() {
   } = supabase.auth.onAuthStateChange(
     (event: AuthChangeEvent, session: Session | null) => {
       handleAuthState(session);
-    }
+    },
   );
 
   authSubscription = subscription;
@@ -606,13 +671,6 @@ export function initAuth() {
     .then(({ data: { session } }: { data: { session: Session | null } }) => {
       handleAuthState(session);
     });
-
-  // 2. Listen for future changes
-  supabase.auth.onAuthStateChange(
-    (event: AuthChangeEvent, session: Session | null) => {
-      handleAuthState(session);
-    }
-  );
 }
 
 export async function requestPasswordReset(email: string) {
