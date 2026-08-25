@@ -18,10 +18,19 @@ import BottomNav from "../../components/BottomNav";
 import { useAuthStore } from "../../lib/auth-store";
 import { FetchAllProducts, Product } from "@/backend/actions";
 import ProductCard from "@/components/ProductCard";
+import { getWeather } from "@/lib/weather";
 // import { requestAdminApproval, useAdminApprovalState } from "@/lib/admin-approval-store";
 import { requestAdminApproval, useAdminApprovalState } from "@/lib/admin-approval-store-temp";
 
 type IconName = React.ComponentProps<typeof Ionicons>["name"];
+
+type WeatherData = {
+  area: string;
+  temperatureC: number;
+  windSpeedKmph: number;
+  humidity: number;
+  summary: string;
+};
 
 const featurePills = ["100% Fresh", "Farm Direct", "Fast Delivery"];
 const categories = ["All", "Vegetables", "Fruits", "Dairy"];
@@ -64,13 +73,35 @@ export default function HomeScreen() {
   const [products, setProducts] = useState<Product[]>([]);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [cart, setCart] = useState<Product[]>([]);
-  
+
   const [leafTapCount, setLeafTapCount] = useState(0);
 
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [searchQuery, setSearchQuery] = useState("");
   const { initialized } = useAuthStore.useState();
   const buyerSignedUp = useBuyerSignedUp();
+
+  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [weatherLoading, setWeatherLoading] = useState(true);
+  const [weatherError, setWeatherError] = useState<string | null>(null);
+
+  const loadWeather = async () => {
+    try {
+      setWeatherLoading(true);
+      setWeatherError(null);
+      const weatherData = await getWeather();
+      setWeather(weatherData);
+    } catch (error) {
+      console.error("Error fetching weather data:", error);
+      setWeatherError("Unable to load weather right now.");
+    } finally {
+      setWeatherLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadWeather();
+  }, []);
 
   const adminApproval = useAdminApprovalState();
 
@@ -140,63 +171,15 @@ export default function HomeScreen() {
     });
   };
 
-  // const handleLeafTap = async () => {
-  //   if (adminApproval.approved) {
-  //     router.push("/admin");
-  //     return;
-  //   }
-
-  //   const nextCount = leafTapCount + 1;
-  //   setLeafTapCount(nextCount);
-
-  //   if (nextCount < 5) {
-  //     if (nextCount === 4) {
-  //       // Alert.alert("Admin Unlock", "Tap once more to request admin approval.");
-  //       console.log("Admin Unlock", "Tap once more to request admin approval.");
-  //     }
-  //     return;
-  //   }
-
-  //   setLeafTapCount(0);
-  //   const result = await requestAdminApproval();
-
-  //   if (!result.ok) {
-  //     // Alert.alert("Approval Error", result.message || "Could not start admin approval.");
-  //     console.log("Approval Error", result.message || "Could not start admin approval.");
-  //     return;
-  //   }
-
-  //   if (result.emailed) {
-  //     // Alert.alert(
-  //     //   "Approval Requested",
-  //     //   "Verification email sent to marydoo211@gmail.com. Admin opens automatically after approval."
-  //     // );
-  //     console.log(
-  //       "Approval Requested",
-  //       "Verification email sent to marydoo211@gmail.com. Admin opens automatically after approval."
-  //     );
-  //     return;
-  //   }
-
-  //   // Alert.alert(
-  //   //   "Approval Pending (Email Not Configured)",
-  //   //   `${result.message}${result.approveUrl ? `\n\nManual approve URL:\n${result.approveUrl}` : ""}`
-  //   // );
-  //   console.log(
-  //     "Approval Pending (Email Not Configured)",
-  //     `${result.message}${result.approveUrl ? `\n\nManual approve URL:\n${result.approveUrl}` : ""}`
-  //   );
-  // };
-
   const handleLeafTap = async () => {
     if (adminApproval.approved) {
       router.push("/admin");
       return;
     }
-  
+
     const nextCount = leafTapCount + 1;
     setLeafTapCount(nextCount);
-  
+
     if (nextCount < 5) {
       if (nextCount === 4) {
         // Alert.alert("Admin Unlock", "Tap once more to request admin approval.");
@@ -204,16 +187,16 @@ export default function HomeScreen() {
       }
       return;
     }
-  
+
     setLeafTapCount(0);
     const result = await requestAdminApproval();
-  
+
     if (!result.ok) {
       // Alert.alert("Approval Error", result.message || "Could not start admin approval.");
       console.log("Approval Error", result.message || "Could not start admin approval.");
       return;
     }
-  
+
     // Alert.alert(
     //   "Approval Requested",
     //   `${result.message}\n\nAn admin needs to approve this in the database. The app will unlock automatically once approved.`
@@ -321,30 +304,65 @@ export default function HomeScreen() {
           </View>
 
           <View style={styles.weatherCard}>
-            <View style={styles.weatherHeader}>
-              <View>
-                <Text style={styles.weatherLabel}>Your Area</Text>
-                <Text style={styles.weatherTemp}>
-                  72° <Text style={styles.weatherUnit}>F</Text>
+            {weatherLoading ? (
+              <View style={styles.weatherLoadingRow}>
+                <ActivityIndicator size="small" color="#fff" />
+                <Text style={styles.weatherLoadingText}>
+                  Getting local weather…
                 </Text>
-                <Text style={styles.weatherState}>Partly Cloudy</Text>
               </View>
-              <Ionicons
-                name="partly-sunny-outline"
-                size={52}
-                color="rgba(255,255,255,0.75)"
-              />
-            </View>
-            <View style={styles.weatherMeta}>
-              <View style={styles.metaItem}>
-                <Ionicons name="water-outline" size={14} color="#e0f2fe" />
-                <Text style={styles.metaText}>65% humidity</Text>
+            ) : weatherError || !weather ? (
+              <View style={styles.weatherHeader}>
+                <View>
+                  <Text style={styles.weatherLabel}>
+                    {weatherError ?? "Weather unavailable"}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={loadWeather}>
+                  <Ionicons
+                    name="refresh-outline"
+                    size={28}
+                    color="rgba(255,255,255,0.85)"
+                  />
+                </TouchableOpacity>
               </View>
-              <View style={styles.metaItem}>
-                <Ionicons name="navigate-outline" size={14} color="#e0f2fe" />
-                <Text style={styles.metaText}>8 mph wind</Text>
-              </View>
-            </View>
+            ) : (
+              <>
+                <View style={styles.weatherHeader}>
+                  <View>
+                    <Text style={styles.weatherLabel}>{weather.area}</Text>
+                    <Text style={styles.weatherTemp}>
+                      {Math.round(weather.temperatureC)}°{" "}
+                      <Text style={styles.weatherUnit}>C</Text>
+                    </Text>
+                    <Text style={styles.weatherState}>{weather.summary}</Text>
+                  </View>
+                  <Ionicons
+                    name="partly-sunny-outline"
+                    size={52}
+                    color="rgba(255,255,255,0.75)"
+                  />
+                </View>
+                <View style={styles.weatherMeta}>
+                  <View style={styles.metaItem}>
+                    <Ionicons name="water-outline" size={14} color="#e0f2fe" />
+                    <Text style={styles.metaText}>
+                      {weather.humidity}% humidity
+                    </Text>
+                  </View>
+                  <View style={styles.metaItem}>
+                    <Ionicons
+                      name="navigate-outline"
+                      size={14}
+                      color="#e0f2fe"
+                    />
+                    <Text style={styles.metaText}>
+                      {Math.round(weather.windSpeedKmph)} km/h wind
+                    </Text>
+                  </View>
+                </View>
+              </>
+            )}
           </View>
 
           <View style={styles.updatesSection}>
@@ -630,6 +648,18 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     backgroundColor: "#0d8ce0",
     padding: 16,
+    minHeight: 92,
+    justifyContent: "center",
+  },
+  weatherLoadingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  weatherLoadingText: {
+    color: "#eff6ff",
+    fontSize: 13,
+    fontWeight: "600",
   },
   weatherHeader: {
     flexDirection: "row",
