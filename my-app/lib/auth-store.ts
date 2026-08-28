@@ -241,21 +241,22 @@ export async function registerUser(
     let userId: string;
     let resolvedFullName = fullName;
 
-    if (
-      existingProfile &&
-      existingProfile.role === "buyer" &&
-      role === "seller"
-    ) {
-      // Existing buyer wants to become a seller too.
-      // Don't call signUp (email already exists) — verify it's really them instead.
-      console.log("Existing buyer upgrading to seller, verifying password...");
+    // Replace the existing `if (existingProfile && existingProfile.role === "buyer" && role === "seller")`
+    if (existingProfile && existingProfile.role === role) {
+      throw new Error(
+        `An account already exists for this email as a ${role}. Please sign in instead.`,
+      );
+    }
 
+    if (existingProfile && existingProfile.role !== role) {
+      // Existing account, different role — verify it's really them
       const { data: signInData, error: signInError } =
         await supabase.auth.signInWithPassword({ email, password });
 
       if (signInError || !signInData.user) {
-        console.error("Password verification failed:", signInError?.message);
-        throw new Error("Incorrect password for existing account.");
+        throw new Error(
+          "That email already has an account. Enter the same password you used when you signed up, or use a different email to create a separate account.",
+        );
       }
 
       userId = signInData.user.id;
@@ -263,26 +264,18 @@ export async function registerUser(
 
       const { error: updateError } = await supabase
         .from("user_profiles")
-        .update({ role: "seller" })
+        .update({ role })
         .eq("id", userId);
-
-      if (updateError) {
-        console.error(
-          "Failed to update profile role to seller:",
-          updateError.message,
-        );
-        throw updateError;
-      }
+      if (updateError) throw updateError;
 
       const { error: metaError } = await supabase.auth.updateUser({
-        data: { role: "seller" },
+        data: { role },
       });
-      if (metaError) {
+      if (metaError)
         console.error(
           "Failed to sync role to auth metadata:",
           metaError.message,
         );
-      }
 
       await refreshUser();
     } else {
@@ -366,6 +359,29 @@ export async function registerUser(
     emit();
     throw error;
   }
+}
+
+export async function checkAccountByEmail(
+  email: string,
+): Promise<{
+  exists: boolean;
+  role?: "buyer" | "seller" | "admin";
+  fullName?: string;
+}> {
+  if (!supabase || !email.trim()) return { exists: false };
+
+  const { data, error } = await supabase
+    .from("user_profiles")
+    .select("role, full_name")
+    .eq("email", email.trim().toLowerCase())
+    .maybeSingle();
+
+  if (error) {
+    console.warn("checkAccountByEmail failed:", error.message);
+    return { exists: false };
+  }
+  if (!data) return { exists: false };
+  return { exists: true, role: data.role, fullName: data.full_name };
 }
 
 /**

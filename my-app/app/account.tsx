@@ -9,6 +9,7 @@ import {
   Image,
   TextInput,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,9 +26,6 @@ import {
 } from "../lib/auth-store";
 import BottomNav from "../components/BottomNav";
 
-const SUPPORT_PHONE = "+233240000000";
-const SUPPORT_EMAIL = "support@farmconnect.app";
-
 function buildInitials(name: string) {
   return name
     .trim()
@@ -41,7 +39,7 @@ export default function AccountScreen() {
   const user = useUser();
   const currentRole = useCurrentRole();
   const [activeTab, setActiveTab] = useState<"profile" | "password" | "help">(
-    "profile"
+    "profile",
   );
 
   const [fullName, setFullName] = useState("");
@@ -114,7 +112,10 @@ export default function AccountScreen() {
     setAddress(user.address ?? "");
     setAvatarUri(user.avatarUri ?? null);
     setMemberSince(
-      new Date().toLocaleDateString("en-US", { year: "numeric", month: "long" })
+      new Date().toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+      }),
     );
   }, [isGuest, user]);
 
@@ -183,7 +184,7 @@ export default function AccountScreen() {
       if (!permission.granted) {
         Alert.alert(
           "Permission needed",
-          "Please allow photo library access to change your profile image."
+          "Please allow photo library access to change your profile image.",
         );
         return;
       }
@@ -206,7 +207,7 @@ export default function AccountScreen() {
     } catch (error) {
       Alert.alert(
         "Image Error",
-        error instanceof Error ? error.message : "Failed to pick image"
+        error instanceof Error ? error.message : "Failed to pick image",
       );
     } finally {
       setUploadingImage(false);
@@ -240,7 +241,7 @@ export default function AccountScreen() {
     } catch (error) {
       Alert.alert(
         "Password Error",
-        error instanceof Error ? error.message : "Could not update password."
+        error instanceof Error ? error.message : "Could not update password.",
       );
     } finally {
       setSavingPassword(false);
@@ -262,7 +263,7 @@ export default function AccountScreen() {
       } catch (error) {
         Alert.alert(
           "Update Error",
-          error instanceof Error ? error.message : "Could not update profile"
+          error instanceof Error ? error.message : "Could not update profile",
         );
       } finally {
         setSavingProfile(false);
@@ -309,7 +310,7 @@ export default function AccountScreen() {
 
   const handleAccountDelete = async () => {
     console.log("Delete button pressed");
-    
+
     Alert.alert(
       "Delete Account",
       "This will permanently delete your account and all your data. This cannot be undone.",
@@ -326,7 +327,43 @@ export default function AccountScreen() {
             }
           },
         },
-      ]
+      ],
+    );
+  };
+
+  const SUPPORT_PHONE = "+233533884010";
+  const SUPPORT_EMAIL = "blackmorri@gmail.com";
+  const SUPPORT_WHATSAPP_NUMBER = "233533884010";
+  const USER_GUIDE_URL = "google.com";
+
+  const openWhatsApp = async () => {
+    const url = `https://wa.me/${SUPPORT_WHATSAPP_NUMBER}`;
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) {
+      Linking.openURL(url);
+    } else {
+      Alert.alert(
+        "Unable to open WhatsApp",
+        "Please make sure WhatsApp is installed.",
+      );
+    }
+  };
+
+  const openEmail = () => {
+    Linking.openURL(`mailto:${SUPPORT_EMAIL}`).catch(() =>
+      Alert.alert("Unable to open email app"),
+    );
+  };
+
+  const openPhone = () => {
+    Linking.openURL(`tel:${SUPPORT_PHONE}`).catch(() =>
+      Alert.alert("Unable to open phone app"),
+    );
+  };
+
+  const openUserGuide = () => {
+    Linking.openURL(USER_GUIDE_URL).catch(() =>
+      Alert.alert("Unable to open link"),
     );
   };
 
@@ -809,7 +846,7 @@ export default function AccountScreen() {
               Get assistance and find answers
             </Text>
 
-            <TouchableOpacity style={styles.helpRow}>
+            <TouchableOpacity style={styles.helpRow} onPress={openWhatsApp}>
               <View style={[styles.helpIcon, { backgroundColor: "#3b82f6" }]}>
                 <Ionicons name="chatbubble-outline" size={20} color="#fff" />
               </View>
@@ -826,7 +863,7 @@ export default function AccountScreen() {
               />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.helpRow}>
+            <TouchableOpacity style={styles.helpRow} onPress={openEmail}>
               <View style={[styles.helpIcon, { backgroundColor: "#10b981" }]}>
                 <Ionicons name="mail-outline" size={20} color="#fff" />
               </View>
@@ -841,7 +878,7 @@ export default function AccountScreen() {
               />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.helpRow}>
+            <TouchableOpacity style={styles.helpRow} onPress={openPhone}>
               <View style={[styles.helpIcon, { backgroundColor: "#8b5cf6" }]}>
                 <Ionicons name="call-outline" size={20} color="#fff" />
               </View>
@@ -856,7 +893,7 @@ export default function AccountScreen() {
               />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.helpRow}>
+            <TouchableOpacity style={styles.helpRow} onPress={openUserGuide}>
               <View style={[styles.helpIcon, { backgroundColor: "#f59e0b" }]}>
                 <Ionicons name="book-outline" size={20} color="#fff" />
               </View>

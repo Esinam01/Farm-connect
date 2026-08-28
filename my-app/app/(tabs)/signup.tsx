@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams, Link } from "expo-router";
-import { registerUser } from "../../lib/auth-store";
+import { registerUser, checkAccountByEmail } from "../../lib/auth-store";
 import { CreateNewUser } from "@/backend/actions";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
@@ -25,6 +25,11 @@ export default function SignUpScreen() {
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [existingEmailInfo, setExistingEmailInfo] = useState<{
+    exists: boolean;
+    role?: "buyer" | "seller" | "admin";
+    fullName?: string;
+  } | null>(null);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<"buyer" | "seller">(initialRole || "buyer");
@@ -37,6 +42,12 @@ export default function SignUpScreen() {
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  const handleEmailBlur = async () => {
+    if (!email.trim() || !/\S+@\S+\.\S+/.test(email)) return;
+    const result = await checkAccountByEmail(email);
+    setExistingEmailInfo(result.exists ? result : null);
+  };
 
   const showToast = (message: string, type: "success" | "error" = "error") => {
     setToast({ message, type });
@@ -115,245 +126,276 @@ export default function SignUpScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-        <KeyboardAwareScrollView bottomOffset={20} contentContainerStyle={styles.scrollContent}>
-          <View style={styles.header}>
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={styles.backButton}
-            >
-              <Ionicons name="arrow-back" size={24} color="#0f9d58" />
-            </TouchableOpacity>
-            <View style={styles.logoContainer}>
-              <View style={styles.logoCircle}>
-                <Ionicons name="person-add" size={40} color="#fff" />
-              </View>
-              <Text style={styles.title}>Create Account</Text>
-              <Text style={styles.subtitle}>
-                {role === "seller" ? "Seller Portal" : "Join the Community"}
-              </Text>
-            </View>
-          </View>
-
-          <KeyboardAwareScrollView style={styles.form}>
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Full Name</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  errors.fullName && styles.inputError,
-                ]}
-              >
-                <Ionicons
-                  name="person-outline"
-                  size={20}
-                  color="#94a3b8"
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="John Doe"
-                  placeholderTextColor="#94a3b8"
-                  value={fullName}
-                  onChangeText={(val) => {
-                    setFullName(val);
-                    validateField("fullName", val);
-                  }}
-                />
-              </View>
-              {errors.fullName ? (
-                <Text style={styles.errorText}>{errors.fullName}</Text>
-              ) : null}
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email Address</Text>
-              <View
-                style={[styles.inputWrapper, errors.email && styles.inputError]}
-              >
-                <Ionicons
-                  name="mail-outline"
-                  size={20}
-                  color="#94a3b8"
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="your@email.com"
-                  placeholderTextColor="#94a3b8"
-                  value={email}
-                  onChangeText={(val) => {
-                    setEmail(val);
-                    validateField("email", val);
-                  }}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </View>
-              {errors.email ? (
-                <Text style={styles.errorText}>{errors.email}</Text>
-              ) : null}
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Join As</Text>
-              <View style={styles.roleToggle}>
-                <TouchableOpacity
-                  style={[
-                    styles.roleOption,
-                    role === "buyer" && styles.roleOptionActive,
-                  ]}
-                  onPress={() => setRole("buyer")}
-                >
-                  <Ionicons
-                    name="cart-outline"
-                    size={18}
-                    color={role === "buyer" ? "#fff" : "#64748b"}
-                  />
-                  <Text
-                    style={[
-                      styles.roleText,
-                      role === "buyer" && styles.roleTextActive,
-                    ]}
-                  >
-                    Buyer
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.roleOption,
-                    role === "seller" && styles.roleOptionActive,
-                  ]}
-                  onPress={() => setRole("seller")}
-                >
-                  <Ionicons
-                    name="storefront-outline"
-                    size={18}
-                    color={role === "seller" ? "#fff" : "#64748b"}
-                  />
-                  <Text
-                    style={[
-                      styles.roleText,
-                      role === "seller" && styles.roleTextActive,
-                    ]}
-                  >
-                    Seller
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  errors.password && styles.inputError,
-                ]}
-              >
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color="#94a3b8"
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="••••••••"
-                  placeholderTextColor="#94a3b8"
-                  value={password}
-                  onChangeText={(val) => {
-                    setPassword(val);
-                    validateField("password", val);
-                  }}
-                  secureTextEntry={!showPassword}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeIcon}
-                >
-                  <Ionicons
-                    name={showPassword ? "eye-off-outline" : "eye-outline"}
-                    size={20}
-                    color="#94a3b8"
-                  />
-                </TouchableOpacity>
-              </View>
-              {errors.password ? (
-                <Text style={styles.errorText}>{errors.password}</Text>
-              ) : null}
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Confirm Password</Text>
-              <View
-                style={[
-                  styles.inputWrapper,
-                  errors.confirmPassword && styles.inputError,
-                ]}
-              >
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={20}
-                  color="#94a3b8"
-                  style={styles.inputIcon}
-                />
-                <TextInput
-                  style={styles.input}
-                  placeholder="••••••••"
-                  placeholderTextColor="#94a3b8"
-                  value={confirmPassword}
-                  onChangeText={(val) => {
-                    setConfirmPassword(val);
-                    validateField("confirmPassword", val);
-                  }}
-                  secureTextEntry={!showPassword}
-                />
-              </View>
-              {errors.confirmPassword ? (
-                <Text style={styles.errorText}>{errors.confirmPassword}</Text>
-              ) : null}
-            </View>
-
-            <TouchableOpacity
-              style={[styles.signUpButton, loading && styles.disabledButton]}
-              onPress={handleSignUp}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.signUpButtonText}>Sign Up</Text>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.footer}>
-              <Text style={styles.footerText}>Already have an account? </Text>
-              <Link href="/Login" asChild>
-                <TouchableOpacity>
-                  <Text style={styles.signInText}>Sign In</Text>
-                </TouchableOpacity>
-              </Link>
-            </View>
-          </KeyboardAwareScrollView>
-        </KeyboardAwareScrollView>
-
-        {toast && (
-          <View
-            style={[
-              styles.toast,
-              toast.type === "error" ? styles.toastError : styles.toastSuccess,
-            ]}
+      <KeyboardAwareScrollView
+        bottomOffset={20}
+        contentContainerStyle={styles.scrollContent}
+      >
+        <View style={styles.header}>
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={styles.backButton}
           >
-            <Ionicons
-              name={
-                toast.type === "error" ? "alert-circle" : "checkmark-circle"
-              }
-              size={20}
-              color="#fff"
-            />
-            <Text style={styles.toastText}>{toast.message}</Text>
+            <Ionicons name="arrow-back" size={24} color="#0f9d58" />
+          </TouchableOpacity>
+          <View style={styles.logoContainer}>
+            <View style={styles.logoCircle}>
+              <Ionicons name="person-add" size={40} color="#fff" />
+            </View>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>
+              {role === "seller" ? "Seller Portal" : "Join the Community"}
+            </Text>
           </View>
-        )}
+        </View>
+
+        <KeyboardAwareScrollView style={styles.form}>
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Full Name</Text>
+            <View
+              style={[
+                styles.inputWrapper,
+                errors.fullName && styles.inputError,
+              ]}
+            >
+              <Ionicons
+                name="person-outline"
+                size={20}
+                color="#94a3b8"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="John Doe"
+                placeholderTextColor="#94a3b8"
+                value={fullName}
+                onChangeText={(val) => {
+                  setFullName(val);
+                  validateField("fullName", val);
+                }}
+              />
+            </View>
+            {errors.fullName ? (
+              <Text style={styles.errorText}>{errors.fullName}</Text>
+            ) : null}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Email Address</Text>
+            <View
+              style={[styles.inputWrapper, errors.email && styles.inputError]}
+            >
+              <Ionicons
+                name="mail-outline"
+                size={20}
+                color="#94a3b8"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="your@email.com"
+                placeholderTextColor="#94a3b8"
+                value={email}
+                onChangeText={(val) => {
+                  setEmail(val);
+                  validateField("email", val);
+                  setExistingEmailInfo(null);
+                }}
+                onBlur={handleEmailBlur}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </View>
+            {errors.email ? (
+              <Text style={styles.errorText}>{errors.email}</Text>
+            ) : null}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Join As</Text>
+            <View style={styles.roleToggle}>
+              <TouchableOpacity
+                style={[
+                  styles.roleOption,
+                  role === "buyer" && styles.roleOptionActive,
+                ]}
+                onPress={() => setRole("buyer")}
+              >
+                <Ionicons
+                  name="cart-outline"
+                  size={18}
+                  color={role === "buyer" ? "#fff" : "#64748b"}
+                />
+                <Text
+                  style={[
+                    styles.roleText,
+                    role === "buyer" && styles.roleTextActive,
+                  ]}
+                >
+                  Buyer
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.roleOption,
+                  role === "seller" && styles.roleOptionActive,
+                ]}
+                onPress={() => setRole("seller")}
+              >
+                <Ionicons
+                  name="storefront-outline"
+                  size={18}
+                  color={role === "seller" ? "#fff" : "#64748b"}
+                />
+                <Text
+                  style={[
+                    styles.roleText,
+                    role === "seller" && styles.roleTextActive,
+                  ]}
+                >
+                  Seller
+                </Text>
+              </TouchableOpacity>
+            </View>
+            {existingEmailInfo?.exists && existingEmailInfo.role === role && (
+              <View style={styles.infoBanner}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color="#b45309"
+                />
+                <Text style={styles.infoBannerText}>
+                  An account already exists with this email as a {role}. Please
+                  sign in instead.
+                </Text>
+              </View>
+            )}
+            {existingEmailInfo?.exists && existingEmailInfo.role !== role && (
+              <View style={styles.infoBanner}>
+                <Ionicons
+                  name="information-circle-outline"
+                  size={18}
+                  color="#b45309"
+                />
+                <Text style={styles.infoBannerText}>
+                  This email already has a {existingEmailInfo.role} account.
+                  Enter the same password you used then to also enable {role}{" "}
+                  access — or use a different email to create a brand-new
+                  account.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Password</Text>
+            <View
+              style={[
+                styles.inputWrapper,
+                errors.password && styles.inputError,
+              ]}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color="#94a3b8"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor="#94a3b8"
+                value={password}
+                onChangeText={(val) => {
+                  setPassword(val);
+                  validateField("password", val);
+                }}
+                secureTextEntry={!showPassword}
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword(!showPassword)}
+                style={styles.eyeIcon}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color="#94a3b8"
+                />
+              </TouchableOpacity>
+            </View>
+            {errors.password ? (
+              <Text style={styles.errorText}>{errors.password}</Text>
+            ) : null}
+          </View>
+
+          <View style={styles.inputContainer}>
+            <Text style={styles.label}>Confirm Password</Text>
+            <View
+              style={[
+                styles.inputWrapper,
+                errors.confirmPassword && styles.inputError,
+              ]}
+            >
+              <Ionicons
+                name="lock-closed-outline"
+                size={20}
+                color="#94a3b8"
+                style={styles.inputIcon}
+              />
+              <TextInput
+                style={styles.input}
+                placeholder="••••••••"
+                placeholderTextColor="#94a3b8"
+                value={confirmPassword}
+                onChangeText={(val) => {
+                  setConfirmPassword(val);
+                  validateField("confirmPassword", val);
+                }}
+                secureTextEntry={!showPassword}
+              />
+            </View>
+            {errors.confirmPassword ? (
+              <Text style={styles.errorText}>{errors.confirmPassword}</Text>
+            ) : null}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.signUpButton, loading && styles.disabledButton]}
+            onPress={handleSignUp}
+            disabled={loading}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.signUpButtonText}>Sign Up</Text>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>Already have an account? </Text>
+            <Link href="/Login" asChild>
+              <TouchableOpacity>
+                <Text style={styles.signInText}>Sign In</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
+        </KeyboardAwareScrollView>
+      </KeyboardAwareScrollView>
+
+      {toast && (
+        <View
+          style={[
+            styles.toast,
+            toast.type === "error" ? styles.toastError : styles.toastSuccess,
+          ]}
+        >
+          <Ionicons
+            name={toast.type === "error" ? "alert-circle" : "checkmark-circle"}
+            size={20}
+            color="#fff"
+          />
+          <Text style={styles.toastText}>{toast.message}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -440,6 +482,24 @@ const styles = StyleSheet.create({
     color: "#0f172a",
     // Remove default web focus outline (cast to any for TS)
     ...(Platform.OS === "web" && ({ outlineStyle: "none" } as any)),
+  },
+  infoBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    backgroundColor: "#fffbeb",
+    borderWidth: 1,
+    borderColor: "#fde68a",
+    borderRadius: 10,
+    padding: 10,
+    marginTop: -8,
+    marginBottom: 16,
+  },
+  infoBannerText: {
+    flex: 1,
+    color: "#92400e",
+    fontSize: 12.5,
+    lineHeight: 17,
   },
   eyeIcon: {
     padding: 8,

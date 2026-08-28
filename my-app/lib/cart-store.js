@@ -54,12 +54,14 @@ export const useCartStore = create((set, get) => ({
 
   addToCart: (product) => {
     const { cart, _persist } = get();
+    const { user } = getAuthState(); //just added by yasmin
     const normalized = {
       ...product,
       sellerId: product.sellerId ?? product.seller_id,
     };
     
-    if(product.sellerId ?? product.seller_id === user?.id){
+    //if(product.sellerId ?? product.seller_id === user?.id){
+    if (user?.id && normalized.sellerId === user.id) { 
       showAlert("You cannot add your own product to the cart.");
       return;
     }
