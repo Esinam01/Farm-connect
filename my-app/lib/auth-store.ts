@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import { createClient, AuthChangeEvent, Session } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+import { uploadToCloudinary } from "../app/(tabs)/seller.jsx";
 
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
@@ -485,11 +486,21 @@ export async function updateCurrentUserProfile(updates: {
   emit();
 
   try {
+    // If a new local avatar was provided, upload it to Cloudinary first
+    let resolvedAvatarUrl: string | null | undefined = updates.avatarUri;
+
+    if (
+      updates.avatarUri &&
+      !updates.avatarUri.startsWith("http") // skip if it's already a hosted URL
+    ) {
+      resolvedAvatarUrl = await uploadToCloudinary(updates.avatarUri);
+    }
+
     const { error: authError } = await supabase.auth.updateUser({
       email: updates.email,
       data: {
         full_name: updates.fullName,
-        avatar_url: updates.avatarUri,
+        avatar_url: resolvedAvatarUrl,
         phone: updates.phone,
         address: updates.address,
       },
@@ -502,7 +513,7 @@ export async function updateCurrentUserProfile(updates: {
       .from("user_profiles")
       .update({
         full_name: updates.fullName,
-        avatar_url: updates.avatarUri,
+        avatar_url: resolvedAvatarUrl,
         phone: updates.phone,
         address: updates.address,
       })
@@ -526,7 +537,7 @@ export async function updateCurrentUserProfile(updates: {
       ...currentUser,
       fullName: updates.fullName ?? currentUser.fullName,
       email: updates.email ?? currentUser.email,
-      avatarUri: updates.avatarUri ?? currentUser.avatarUri,
+      avatarUri: resolvedAvatarUrl ?? currentUser.avatarUri,
       phone: updates.phone ?? currentUser.phone,
       address: updates.address ?? currentUser.address,
     };

@@ -34,6 +34,49 @@ import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useNotificationStore } from "../../lib/notificationStore";
 import NotificationsModal from "../../components/NotificationsModal";
 
+const CLOUDINARY_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_NAME;
+const CLOUDINARY_UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
+const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`;
+
+export const uploadToCloudinary = async (localUri) => {
+  const filename = localUri.split("/").pop();
+  const match = /\.(\w+)$/.exec(filename ?? "");
+  const fileType = match ? match[1] : "jpg";
+
+  const formData = new FormData();
+
+  if (Platform.OS === "web") {
+    // Web needs a real Blob/File, not {uri, name, type}
+    const response = await fetch(localUri);
+    const blob = await response.blob();
+    formData.append("file", blob, filename);
+  } else {
+    // iOS/Android accept this RN-specific shape
+    formData.append("file", {
+      uri: localUri,
+      name: filename,
+      type: `image/${fileType}`,
+    });
+  }
+
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+
+  const response = await fetch(CLOUDINARY_UPLOAD_URL, {
+    method: "POST",
+    body: formData,
+  });
+
+  const data = await response.json();
+  console.log("Cloudinary response:", response.status);
+
+  if (!response.ok) {
+    throw new Error(data?.error?.message || "Cloudinary upload failed");
+  }
+
+  return data.secure_url;
+};
+
+
 // ─── Initial Data ─────────────────────────────────────────────────────────────
 
 const INITIAL_PRODUCTS = [
@@ -78,11 +121,11 @@ const UNITS = [
   "basket",
   "dozen",
   "gallon",
-  "jar",
+  "ounce",
   "bag",
-  "ear",
+  "Gross",
   "pint",
-  "piece",
+  "crate",
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -268,56 +311,14 @@ function DetailRow({ icon, label, value }) {
     </View>
   );
 }
-
 // ─── Product Form Modal ───────────────────────────────────────────────────────
 
 function ProductFormModal({ visible, onClose, onSave, editProduct }) {
-  const CLOUDINARY_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_NAME;
-  const CLOUDINARY_UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
-  const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`;
   const categories = useCategories();
   const [form, setForm] = useState(emptyForm());
   const [errors, setErrors] = useState({});
   const [imageError, setImageError] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
-
-  const uploadToCloudinary = async (localUri) => {
-    const filename = localUri.split("/").pop();
-    const match = /\.(\w+)$/.exec(filename ?? "");
-    const fileType = match ? match[1] : "jpg";
-
-    const formData = new FormData();
-
-    if (Platform.OS === "web") {
-      // Web needs a real Blob/File, not {uri, name, type}
-      const response = await fetch(localUri);
-      const blob = await response.blob();
-      formData.append("file", blob, filename);
-    } else {
-      // iOS/Android accept this RN-specific shape
-      formData.append("file", {
-        uri: localUri,
-        name: filename,
-        type: `image/${fileType}`,
-      });
-    }
-
-    formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-
-    const response = await fetch(CLOUDINARY_UPLOAD_URL, {
-      method: "POST",
-      body: formData,
-    });
-
-    const data = await response.json();
-    console.log("Cloudinary response:", response.status);
-
-    if (!response.ok) {
-      throw new Error(data?.error?.message || "Cloudinary upload failed");
-    }
-
-    return data.secure_url;
-  };
 
   useEffect(() => {
     if (categories.length === 0) fetchCategories();
@@ -453,7 +454,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
       Alert.alert(
         "Error",
         "Failed to pick image: " +
-        (error instanceof Error ? error.message : String(error)),
+          (error instanceof Error ? error.message : String(error)),
       );
     }
   };
@@ -462,7 +463,7 @@ function ProductFormModal({ visible, onClose, onSave, editProduct }) {
     <Modal visible={visible} animationType="slide" transparent>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-      // behavior={Platform.OS === "ios" ? "padding" : "height"}
+        // behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         {/* <KeyboardAwareScrollView bottomOffset={20}> */}
         <View style={styles.modalOverlay}>
@@ -727,11 +728,11 @@ export default function SellerScreen() {
 
   const initials = user?.fullName
     ? user.fullName
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase()
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
     : "U";
 
   useEffect(() => {
@@ -771,8 +772,8 @@ export default function SellerScreen() {
   };
 
   useEffect(() => {
-      if (user?.id) init(user.id);
-    }, [user?.id]);
+    if (user?.id) init(user.id);
+  }, [user?.id]);
 
   // Replace this with real alert count from your context/store later
   const activeAlerts = 2;

@@ -6,7 +6,9 @@
       "@/*": [
         "./*"
       ]
-    }
+    },
+    "allowJs": true,
+    "checkJs": false
   },
   "include": [
     "**/*.ts",

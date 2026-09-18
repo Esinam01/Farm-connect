@@ -51,7 +51,7 @@ function resolveApiBaseUrl() {
     Constants.expoConfig?.hostUri,
     Constants.expoGoConfig?.debuggerHost,
     Constants.manifest2?.extra?.expoClient?.hostUri,
-    Constants.manifest?.debuggerHost,
+    (Constants.manifest as any)?.debuggerHost,
   ].filter(Boolean);
 
   const host = hostCandidates[0]?.split(":")[0];
