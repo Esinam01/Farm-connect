@@ -62,6 +62,8 @@ export default function AccountScreen() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [completedOrders, setCompletedOrders] = useState<number | null>(null);
+  const [points, setPoints] = useState<number | null>(null);
 
   const { initialized } = useAuthStore.useState();
   const isGuest = !user;
@@ -118,6 +120,59 @@ export default function AccountScreen() {
       }),
     );
   }, [isGuest, user]);
+
+  useEffect(() => {
+    if (isGuest) {
+      setCompletedOrders(null);
+      setPoints(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchCounts = async () => {
+      const {
+        data: { user: authUser },
+      } = await supabase.auth.getUser();
+
+      if (!authUser) {
+        if (!cancelled) {
+          setCompletedOrders(0);
+          setPoints(0);
+        }
+        return;
+      }
+
+      const [ordersRes, itemsRes] = await Promise.all([
+        supabase
+          .from("orders")
+          .select("id", { count: "exact", head: true })
+          .eq("buyer_id", authUser.id),
+        supabase
+          .from("order_items")
+          .select("id", { count: "exact", head: true })
+          .eq("seller_id", authUser.id),
+      ]);
+
+      if (cancelled) return;
+
+      if (ordersRes.error) {
+        console.error("Failed to load orders:", ordersRes.error.message);
+      }
+      if (itemsRes.error) {
+        console.error("Failed to load order_items:", itemsRes.error.message);
+      }
+
+      setCompletedOrders(ordersRes.count ?? 0);
+      setPoints(itemsRes.count ?? 0);
+    };
+
+    fetchCounts();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, user?.email]);
 
   if (!initialized) {
     return (
@@ -519,23 +574,19 @@ export default function AccountScreen() {
                 <View style={[styles.statIcon, { backgroundColor: "#10b981" }]}>
                   <Ionicons name="bag-outline" size={24} color="#fff" />
                 </View>
-                <Text style={styles.statNumber}>23</Text>
-                <Text style={styles.statLabel}>Orders</Text>
-              </View>
-
-              <View style={styles.statBox}>
-                <View style={[styles.statIcon, { backgroundColor: "#3b82f6" }]}>
-                  <Ionicons name="heart-outline" size={24} color="#fff" />
-                </View>
-                <Text style={styles.statNumber}>8</Text>
-                <Text style={styles.statLabel}>Wishlist</Text>
+                <Text style={styles.statNumber}>
+                  {completedOrders === null ? "–" : completedOrders}
+                </Text>
+                <Text style={styles.statLabel}>Completed</Text>
               </View>
 
               <View style={styles.statBox}>
                 <View style={[styles.statIcon, { backgroundColor: "#d946ef" }]}>
                   <Ionicons name="star-outline" size={24} color="#fff" />
                 </View>
-                <Text style={styles.statNumber}>340</Text>
+                <Text style={styles.statNumber}>
+                  {points === null ? "–" : points}
+                </Text>
                 <Text style={styles.statLabel}>Points</Text>
               </View>
             </View>
@@ -1134,6 +1185,8 @@ const styles = StyleSheet.create({
   statsContainer: {
     flexDirection: "row",
     gap: 12,
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 20,
   },
   statBox: {
@@ -1141,6 +1194,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 16,
     padding: 12,
+    maxWidth: 150,
     alignItems: "center",
     borderWidth: 1,
     borderColor: "#e2e8f0",
