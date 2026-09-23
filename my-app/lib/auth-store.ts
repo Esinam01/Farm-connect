@@ -2,7 +2,7 @@ import { useSyncExternalStore } from "react";
 import { createClient, AuthChangeEvent, Session } from "@supabase/supabase-js";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
-import { uploadToCloudinary } from "../app/(tabs)/seller.jsx";
+import { uploadToCloudinary } from "./cloudinary";
 
 const SUPABASE_URL =
   process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
@@ -362,9 +362,7 @@ export async function registerUser(
   }
 }
 
-export async function checkAccountByEmail(
-  email: string,
-): Promise<{
+export async function checkAccountByEmail(email: string): Promise<{
   exists: boolean;
   role?: "buyer" | "seller" | "admin";
   fullName?: string;
@@ -393,6 +391,11 @@ export async function loginUser(
   password: string,
   expectedRole: "buyer" | "seller",
 ): Promise<User> {
+  if (!supabase) {
+    throw new Error("App is not configured. Missing Supabase credentials.");
+  }
+  email = email.trim().toLowerCase();
+
   state = { ...state, loading: true };
   emit();
 
@@ -477,6 +480,9 @@ export async function updateCurrentUserProfile(updates: {
   phone?: string;
   address?: string;
 }) {
+  if (!supabase) {
+    throw new Error("App is not configured. Missing Supabase credentials.");
+  }
   const currentUser = state.user;
   if (!currentUser) {
     throw new Error("No user is currently signed in");
@@ -564,6 +570,9 @@ export async function updateCurrentUserPassword(
   currentPassword: string,
   newPassword: string,
 ) {
+  if (!supabase) {
+    throw new Error("App is not configured. Missing Supabase credentials.");
+  }
   // Re-authenticate with current password first
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: state.user!.email,
@@ -581,17 +590,17 @@ export async function updateCurrentUserPassword(
  * Logout user
  */
 export async function logout() {
+  state = {
+    ...state,
+    user: null,
+    isLoggedIn: false,
+    currentRole: null,
+    initialized: true,
+  };
+  emit();
+
+  if (!supabase) return;
   try {
-    state = {
-      ...state,
-      user: null,
-      isLoggedIn: false,
-      currentRole: null,
-      initialized: true,
-    };
-
-    emit();
-
     await supabase.auth.signOut({ scope: "local" });
   } catch (error) {
     console.error(error);
@@ -602,6 +611,9 @@ export async function logout() {
 
 //Delete user account
 export async function deleteAccount() {
+  if (!supabase) {
+    throw new Error("App is not configured. Missing Supabase credentials.");
+  }
   const userId = state.user?.id;
   if (!userId) throw new Error("No user found");
 
@@ -665,8 +677,8 @@ export async function mockLogin(role: "buyer" | "seller") {
  */
 export function initAuth() {
   if (!supabase) {
-    console.error("Auth Store: Supabase client is null. Check your .env file.");
-    // state = { ...state, initialized: true, loading: false };
+    console.error("Auth Store: Supabase client is null. Check your env vars.");
+    state = { ...state, initialized: true, loading: false };
     emit();
     return;
   }
@@ -676,14 +688,13 @@ export function initAuth() {
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange(
-    (event: AuthChangeEvent, session: Session | null) => {
+    (_event: AuthChangeEvent, session: Session | null) => {
       handleAuthState(session);
     },
   );
-
   authSubscription = subscription;
 
-  // Safety timeout: if auth takes more than 5 seconds, mark as initialized anyway
+  // Safety timeout: if auth takes more than 5 seconds, proceed as guest
   const timeout = setTimeout(() => {
     if (!state.initialized) {
       console.warn("Auth initialization timed out. Proceeding as guest.");
@@ -692,21 +703,28 @@ export function initAuth() {
     }
   }, 5000);
 
-  // 1. Initial session check
   supabase.auth
     .getSession()
     .then(({ data: { session } }: { data: { session: Session | null } }) => {
       handleAuthState(session);
-    });
+    })
+    .catch((e: unknown) => {
+      console.error("getSession failed:", e);
+      state = { ...state, initialized: true, loading: false };
+      emit();
+    })
+    .finally(() => clearTimeout(timeout));
 }
 
 export async function requestPasswordReset(email: string) {
+  if (!API_BASE_URL) throw new Error("API base URL is not configured.");
   const res = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
   });
-  return res.json(); // { ok: true, message: "..." }
+  if (!res.ok) throw new Error("Could not send reset email. Try again.");
+  return res.json();
 }
 
 // Auto-init on load
