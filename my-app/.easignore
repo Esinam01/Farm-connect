@@ -1,4 +1,6 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+*.log
+*.keystore
+*.jks
 
 # dependencies
 node_modules/
@@ -8,7 +10,6 @@ node_modules/
 dist/
 web-build/
 expo-env.d.ts
-.eas.json
 
 # Native
 .kotlin/
@@ -31,14 +32,11 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
-.env*.local
-
 # typescript
 *.tsbuildinfo
 
 app-example
-
+kjjjjjjjjjjjjjjj
 # generated native folders
 /ios
 /android

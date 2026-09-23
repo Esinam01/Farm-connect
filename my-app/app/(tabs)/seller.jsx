@@ -33,48 +33,7 @@ import {
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useNotificationStore } from "../../lib/notificationStore";
 import NotificationsModal from "../../components/NotificationsModal";
-
-const CLOUDINARY_NAME = process.env.EXPO_PUBLIC_CLOUDINARY_NAME;
-const CLOUDINARY_UPLOAD_PRESET = process.env.EXPO_PUBLIC_CLOUDINARY_PRESET;
-const CLOUDINARY_UPLOAD_URL = `https://api.cloudinary.com/v1_1/${CLOUDINARY_NAME}/image/upload`;
-
-export const uploadToCloudinary = async (localUri) => {
-  const filename = localUri.split("/").pop();
-  const match = /\.(\w+)$/.exec(filename ?? "");
-  const fileType = match ? match[1] : "jpg";
-
-  const formData = new FormData();
-
-  if (Platform.OS === "web") {
-    // Web needs a real Blob/File, not {uri, name, type}
-    const response = await fetch(localUri);
-    const blob = await response.blob();
-    formData.append("file", blob, filename);
-  } else {
-    // iOS/Android accept this RN-specific shape
-    formData.append("file", {
-      uri: localUri,
-      name: filename,
-      type: `image/${fileType}`,
-    });
-  }
-
-  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-
-  const response = await fetch(CLOUDINARY_UPLOAD_URL, {
-    method: "POST",
-    body: formData,
-  });
-
-  const data = await response.json();
-  console.log("Cloudinary response:", response.status);
-
-  if (!response.ok) {
-    throw new Error(data?.error?.message || "Cloudinary upload failed");
-  }
-
-  return data.secure_url;
-};
+import {uploadToCloudinary} from "../../lib/cloudinary";
 
 
 // ─── Initial Data ─────────────────────────────────────────────────────────────
